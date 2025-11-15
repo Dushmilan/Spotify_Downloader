@@ -20,8 +20,20 @@ def is_spotify_url(url):
 def is_valid_spotify_url(url):
     """Return True if the url is a valid spotify url."""
     try:
-        response = requests.get(url, timeout=10)  # Add timeout to prevent hanging
-        return response.status_code == 200
+        # Send a HEAD request first to check if the URL is accessible, as it's faster
+        response = requests.head(url, timeout=10, allow_redirects=True)
+        # Accept 200 (OK) and 3xx (redirects) as valid
+        if response.status_code in [200, 301, 302, 307, 308]:
+            return True
+        else:
+            logger.warning(f"Spotify URL returned status code {response.status_code}: {url}")
+            return False
+    except requests.exceptions.Timeout:
+        logger.warning(f"Timeout when validating URL {url}: Request took more than 10 seconds")
+        return False
+    except requests.exceptions.ConnectionError:
+        logger.warning(f"Connection error when validating URL {url}: Unable to connect to Spotify")
+        return False
     except requests.exceptions.RequestException as e:
         logger.warning(f"Network error when validating URL {url}: {str(e)}")
         return False
