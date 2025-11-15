@@ -5,7 +5,12 @@ Spotify Downloader - Download Spotify tracks, albums, and playlists
 
 import argparse
 import sys
-from src.spotify_downloader import SpotifyDownloader
+import os
+
+# Add src directory to Python path
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
+
+from spotify_downloader import SpotifyDownloader
 
 
 def main():
@@ -13,11 +18,11 @@ def main():
     parser.add_argument("url", help="Spotify URL to download")
     parser.add_argument("-o", "--output", default="./downloads", help="Output directory")
     parser.add_argument("--format", default="mp3", choices=["mp3", "wav", "flac"], help="Output audio format")
-    
+
     args = parser.parse_args()
-    
+
     downloader = SpotifyDownloader(output_dir=args.output, audio_format=args.format)
-    
+
     try:
         downloader.download(args.url)
     except Exception as e:

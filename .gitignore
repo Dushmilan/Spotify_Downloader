@@ -111,6 +111,7 @@ venv.bak/
 
 # mkdocs documentation
 /site
+.qwen
 
 # mypy
 .mypy_cache/
