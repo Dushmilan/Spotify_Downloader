@@ -1,0 +1,20 @@
+# Example usage of the Spotify Downloader
+# This is just a demonstration - you would replace the URL with a real Spotify track/album/playlist URL
+
+print("Spotify Downloader - Usage Examples")
+print("="*40)
+
+print("\nTo download a single track:")
+print("python main.py https://open.spotify.com/track/5lXIYaLm8l3E5jl92NpG0C")
+
+print("\nTo download an album:")
+print("python main.py https://open.spotify.com/album/2YMWkm1Xq6S46qq6pU1EYV")
+
+print("\nTo download a playlist:")
+print("python main.py https://open.spotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M")
+
+print("\nTo specify output directory and format:")
+print("python main.py https://open.spotify.com/track/5lXIYaLm8l3E5jl92NpG0C -o ./my_music --format flac")
+
+print("\nNote: Actual download requires valid Spotify URLs and an active internet connection.")
+print("Also, make sure you have ffmpeg installed on your system for audio conversion.")

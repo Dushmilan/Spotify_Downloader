@@ -3,10 +3,17 @@ Main orchestrator for the Spotify Downloader
 """
 
 import os
-from .url_handler import URLHandler
-from .spotify_scraper import SpotifyScraper
-from .youtube_searcher import YouTubeSearcher
-from .file_converter import FileConverter
+import sys
+import importlib.util
+
+# Add the src directory to the path to allow importing
+src_dir = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, src_dir)
+
+from url_handler import URLHandler
+from spotify_handler import SpotifyScraper
+from youtube_searcher import YouTubeSearcher
+from file_converter import FileConverter
 
 
 class SpotifyDownloader:
