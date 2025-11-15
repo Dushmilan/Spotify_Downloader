@@ -80,39 +80,37 @@ def search_youtube_for_video(query, playlist_or_album_name=None, track_number=No
         max_retries = 3
         retry_count = 0
 
-        # Map quality setting to appropriate format with proper FFmpeg parameters
+        # For quality preservation, map user quality preference to appropriate VBR settings
+        # Instead of forcing bitrate re-encode, use quality-based VBR settings
         quality_settings = {
-            '128': {'abr': 128, 'vbr': 128},
-            '192': {'abr': 192, 'vbr': 192},
-            '256': {'abr': 256, 'vbr': 256},
-            '320': {'abr': 320, 'vbr': 320}
+            '128': {'vbr': 7},  # Lower quality VBR
+            '192': {'vbr': 5},  # Medium quality VBR (default)
+            '256': {'vbr': 3},  # High quality VBR
+            '320': {'vbr': 0},  # Highest quality VBR
         }
-        selected_quality = quality_settings.get(quality, {'abr': 192, 'vbr': 192})  # Default to 192 if invalid quality specified
+        selected_quality = quality_settings.get(quality, {'vbr': 5})  # Default to medium quality VBR
 
-        # According to yt-dlp documentation: Use format selection to get closest to target bitrate
-        # Higher bitrates: try to get high quality sources; lower bitrates: allow lower quality
+        # Use format selection that prioritizes original quality with fallbacks
         ydl_opts = {
-            'format': 'bestaudio/best',
+            'format': 'bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio/best',
             'postprocessors': [{
                 'key': 'FFmpegExtractAudio',
                 'preferredcodec': format,
-                'preferredquality': 0,  # Use highest quality for extraction
+                'preferredquality': '0',  
             }],
             'postprocessor_args': [
-                '-b:a', f"{selected_quality['abr']}k",  # Set target audio bitrate
-                '-ar', '44100',  # Set audio sample rate
-                '-ac', '2',      # Set to stereo
-                '-y',            # Overwrite output file
-                '-write_id3v2', '1',  # Ensure ID3 tags are written
-                '-id3v2_version', '3'  # Use ID3v2.3 tags
+                '-ar', '48000',  
+                '-ac', '2',      
+                '-y',            
+                '-write_id3v2', '1',  
+                '-id3v2_version', '3'  
             ],
             'prefer_ffmpeg': True,
-            'audioquality': selected_quality['abr'],
             'extractaudio': True,
             'audioformat': format,
-            'outtmpl': outtmpl,  # Save to organized folder structure
+            'outtmpl': outtmpl,  
             'noplaylist': True,
-            'ignoreerrors': True,  # Continue with other items if one fails
+            'ignoreerrors': True,  
             'no_warnings': False,
             'quiet': False,
             'extractor_args': {
@@ -123,7 +121,7 @@ def search_youtube_for_video(query, playlist_or_album_name=None, track_number=No
         }
 
         logger.info(f"Searching YouTube for: {query}")
-        logger.info(f"Download settings - Quality: {selected_quality['abr']}kbps, Format: {format}, Bitrate: {selected_quality['abr']}k")
+        logger.info(f"Download settings - Format: {format}, VBR Quality: {selected_quality['vbr']}, Sample Rate: 48000Hz")
 
         # Attempt download with retries
         while retry_count < max_retries:
