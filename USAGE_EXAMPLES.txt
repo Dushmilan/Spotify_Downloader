@@ -1,20 +1,68 @@
-# Example usage of the Spotify Downloader
-# This is just a demonstration - you would replace the URL with a real Spotify track/album/playlist URL
+# Usage Examples
 
-print("Spotify Downloader - Usage Examples")
-print("="*40)
+## Basic Usage
 
-print("\nTo download a single track:")
-print("python main.py https://open.spotify.com/track/5lXIYaLm8l3E5jl92NpG0C")
+1. Download a single track:
+```
+python main.py https://open.spotify.com/track/5lXIYaLm8l3E5jl92NpG0C
+```
 
-print("\nTo download an album:")
-print("python main.py https://open.spotify.com/album/2YMWkm1Xq6S46qq6pU1EYV")
+2. Download an album:
+```
+python main.py https://open.spotify.com/album/2YMWkm1Xq6S46qq6pU1EYV
+```
 
-print("\nTo download a playlist:")
-print("python main.py https://open.spotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M")
+3. Download a playlist:
+```
+python main.py https://open.spotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M
+```
 
-print("\nTo specify output directory and format:")
-print("python main.py https://open.spotify.com/track/5lXIYaLm8l3E5jl92NpG0C -o ./my_music --format flac")
+4. Download with custom output directory and format:
+```
+python main.py https://open.spotify.com/track/5lXIYaLm8l3E5jl92NpG0C -o ./my_music --format flac
+```
 
-print("\nNote: Actual download requires valid Spotify URLs and an active internet connection.")
-print("Also, make sure you have ffmpeg installed on your system for audio conversion.")
+## Advanced CLI Usage (after installation)
+
+After installing the package with `pip install .`, you can use the `spotify-dl` command:
+
+1. Download with high quality audio (320k):
+```
+spotify-dl https://open.spotify.com/album/2YMWkm1Xq6S46qq6pU1EYV -q 320k
+```
+
+2. Download with verbose output for debugging:
+```
+spotify-dl https://open.spotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M -v
+```
+
+3. Download as different audio formats:
+```
+# As WAV
+spotify-dl https://open.spotify.com/track/5lXIYaLm8l3E5jl92NpG0C --format wav
+
+# As FLAC
+spotify-dl https://open.spotify.com/track/5lXIYaLm8l3E5jl92NpG0C --format flac
+
+# As M4A
+spotify-dl https://open.spotify.com/track/5lXIYaLm8l3E5jl92NpG0C --format m4a
+```
+
+4. Complete example with all options:
+```
+spotify-dl https://open.spotify.com/album/2YMWkm1Xq6S46qq6pU1EYV -o ./high_quality_music --format flac -q 320k -v
+```
+
+## Help Command
+
+To see all available options:
+```
+spotify-dl -h
+# or
+python main.py -h
+```
+
+## Notes:
+- Actual download requires valid Spotify URLs and an active internet connection.
+- Make sure you have ffmpeg installed on your system for audio conversion.
+- The tool downloads audio from YouTube based on the track name and artist from Spotify.

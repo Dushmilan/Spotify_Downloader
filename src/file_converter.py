@@ -15,7 +15,7 @@ class FileConverter:
     def convert_to_format(input_path, output_path, output_format='mp3', quality='192k'):
         """
         Convert an audio file to a specified format
-        
+
         Args:
             input_path (str): Path to the input audio file
             output_path (str): Path where the converted file should be saved
@@ -33,17 +33,17 @@ class FileConverter:
                 '-y',            # Overwrite output file if it exists
                 output_path
             ]
-            
+
             # Run the command
             result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-            
+
             if result.returncode != 0:
                 raise Exception(f"FFmpeg conversion failed: {result.stderr}")
-                
+
             # Remove the original file after successful conversion
             if os.path.exists(input_path) and input_path != output_path:
                 os.remove(input_path)
-                
+
         except Exception as e:
             raise Exception(f"Error during audio conversion: {e}")
     

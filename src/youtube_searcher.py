@@ -66,13 +66,14 @@ class YouTubeSearcher:
         except Exception as e:
             raise Exception(f"Error searching YouTube: {e}")
     
-    def download_audio(self, video_url, output_path):
+    def download_audio(self, video_url, output_path, verbose=False):
         """
         Download audio from a YouTube video
-        
+
         Args:
             video_url (str): URL of the YouTube video
             output_path (str): Path where the audio file should be saved
+            verbose (bool): Enable verbose output
         """
         ydl_opts = {
             'format': 'bestaudio/best',
@@ -90,9 +91,9 @@ class YouTubeSearcher:
             'audioformat': 'mp3',
             'keepvideo': False,
             'outtmpl': output_path,
-            'quiet': False
+            'quiet': not verbose
         }
-        
+
         try:
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 ydl.download([video_url])
