@@ -22,3 +22,6 @@ MANIFEST
 # OS
 .DS_Store
 Thumbs.db
+
+# Loggers
+spotify_downloader.log
