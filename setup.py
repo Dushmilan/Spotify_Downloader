@@ -4,7 +4,6 @@ Setup script for Spotify Downloader
 """
 
 from setuptools import setup, find_packages
-import sys
 
 
 setup(
@@ -12,8 +11,7 @@ setup(
     version="1.0.0",
     description="A tool to download Spotify tracks, albums, and playlists as audio files",
     author="Qwen",
-    packages=find_packages(where="src"),
-    package_dir={"": "src"},
+    packages=find_packages(),
     install_requires=[
         "spotifyscraper",
         "yt-dlp",
@@ -22,8 +20,10 @@ setup(
     ],
     entry_points={
         "console_scripts": [
-            "spotify-dl=main:main",  # This creates the 'spotify-dl' command
+            "spotify-dl=spotify_downloader.cli.main:main",  # This creates the 'spotify-dl' command
         ],
     },
     python_requires=">=3.6",
+    long_description=open("README.md").read(),
+    long_description_content_type="text/markdown",
 )

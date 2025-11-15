@@ -1,6 +1,6 @@
 # Spotify Downloader
 
-This project enables you to download Spotify content as audio files by using a combination of web scraping and YouTube audio extraction.
+A professional Python application that enables you to download Spotify content as audio files by using a combination of web scraping and YouTube audio extraction.
 
 ## Core Idea
 
@@ -13,19 +13,28 @@ The project workflow is:
 - Converting using ffmpeg
 - Saving the file
 
+## Features
+
+- **Modular Architecture**: Clean separation of concerns with dedicated modules for different functionality
+- **Professional Logging**: Comprehensive logging system for debugging and monitoring
+- **Error Handling**: Custom exceptions for better error management
+- **Configuration Management**: Centralized configuration with environment variable support
+- **Extensible Design**: Well-documented codebase with clear interfaces
+
 ## Libraries Used
 
 - `spotifyscraper` - For extracting data from Spotify without authentication : https://spotifyscraper.readthedocs.io/en/latest/
 - `yt-dlp` - For downloading audio from YouTube
 - `ffmpeg` - For audio conversion and processing
+- `requests` - For HTTP requests
 
 ## Tech Stack
 
-- Python 3.x
+- Python 3.7+
 
 ## Prerequisites
 
-1. Python 3.x installed
+1. Python 3.7+ installed
 2. FFmpeg installed and available in your system PATH
 3. Required Python packages (install using `pip install -r requirements.txt`)
 
@@ -38,7 +47,7 @@ The project workflow is:
    pip install -r requirements.txt
    ```
 3. Make sure you have FFmpeg installed on your system
-4. Run using: `python main.py <spotify_url>`
+4. Run using: `python -m spotify_downloader.cli.main <spotify_url>`
 
 ### Option 2: Install as CLI tool
 1. Clone or download this repository
@@ -57,7 +66,7 @@ The project workflow is:
 
 ### Direct execution:
 ```bash
-python main.py [options] <Spotify_URL>
+python -m spotify_downloader.cli.main [options] <Spotify_URL>
 ```
 
 ### Installed CLI:
@@ -76,19 +85,19 @@ spotify-dl [options] <Spotify_URL>
 ### Examples
 ```bash
 # Download a single track
-python main.py https://open.spotify.com/track/5lXIYaLm8l3E5jl92NpG0C
+python -m spotify_downloader.cli.main https://open.spotify.com/track/5lXIYaLm8l3E5jl92NpG0C
 # Or if installed: spotify-dl https://open.spotify.com/track/5lXIYaLm8l3E5jl92NpG0C
 
 # Download an album with high quality
-python main.py https://open.spotify.com/album/2YMWkm1Xq6S46qq6pU1EYV -q 320k
+python -m spotify_downloader.cli.main https://open.spotify.com/album/2YMWkm1Xq6S46qq6pU1EYV -q 320k
 # Or if installed: spotify-dl https://open.spotify.com/album/2YMWkm1Xq6S46qq6pU1EYV -q 320k
 
 # Download a playlist to a custom directory
-python main.py https://open.spotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M -o ./my_music
+python -m spotify_downloader.cli.main https://open.spotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M -o ./my_music
 # Or if installed: spotify-dl https://open.spotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M -o ./my_music
 
 # Download as WAV format with verbose output
-python main.py https://open.spotify.com/track/5lXIYaLm8l3E5jl92NpG0C --format wav -v
+python -m spotify_downloader.cli.main https://open.spotify.com/track/5lXIYaLm8l3E5jl92NpG0C --format wav -v
 # Or if installed: spotify-dl https://open.spotify.com/track/5lXIYaLm8l3E5jl92NpG0C --format wav -v
 ```
 
@@ -96,18 +105,42 @@ python main.py https://open.spotify.com/track/5lXIYaLm8l3E5jl92NpG0C --format wa
 
 ```
 Spotify_Downloader/
-├── src/
+├── src/                       # Source code
+│   └── spotify_downloader/   # Main package
+│       ├── __init__.py       # Package initialization
+│       ├── __main__.py       # Module execution entry point
+│       ├── cli/              # Command-line interface
+│       │   ├── __init__.py
+│       │   └── main.py
+│       ├── core/             # Core application logic
+│       │   ├── __init__.py
+│       │   └── downloader.py # Main orchestrator class
+│       ├── services/         # External service integrations
+│       │   ├── __init__.py
+│       │   ├── url_handler.py
+│       │   ├── spotify_handler.py
+│       │   ├── youtube_searcher.py
+│       │   └── file_converter.py
+│       ├── utils/            # Utility functions
+│       │   ├── __init__.py
+│       │   └── logger.py
+│       ├── config/           # Configuration management
+│       │   └── __init__.py
+│       └── exceptions/       # Custom exception classes
+│           └── __init__.py
+├── tests/                    # Test suite
 │   ├── __init__.py
-│   ├── spotify_downloader.py  # Main orchestrator class
-│   ├── url_handler.py         # Parses and categorizes Spotify URLs
-│   ├── spotify_handler.py     # Interfaces with SpotifyScraper library
-│   ├── youtube_searcher.py    # Uses yt-dlp to search and download from YouTube
-│   └── file_converter.py      # Handles audio conversion with ffmpeg
-├── requirements.txt           # Python dependencies
-├── main.py                   # Command-line entry point
-├── setup.py                  # Setup script
-├── .gitignore                # Git ignore file
-└── README.md                 # This file
+│   ├── core/                 # Tests for core functionality
+│   ├── services/             # Tests for service integrations
+│   ├── cli/                  # Tests for CLI
+│   └── utils/                # Tests for utilities
+├── docs/                     # Documentation
+├── scripts/                  # Utility scripts
+├── requirements.txt          # Python dependencies
+├── pyproject.toml            # Project metadata and build configuration
+├── setup.py                  # Setup script (legacy)
+├── .gitignore               # Git ignore file
+└── README.md                # This file
 ```
 
 ## How It Works
@@ -118,6 +151,29 @@ Spotify_Downloader/
 4. **Audio Download**: Audio is downloaded from YouTube using yt-dlp.
 5. **Format Conversion**: The audio is converted to the desired format using ffmpeg.
 6. **File Saving**: The final audio file is saved to the specified output directory.
+
+## Migration Guide
+
+### From previous versions:
+
+1. **Directory Structure Changes**:
+   - Moved source code to `src/` directory following Python packaging best practices
+   - Separated concerns into dedicated modules: `core`, `services`, `utils`, `config`, `exceptions`
+
+2. **Module Import Changes**:
+   - Old: `from spotify_downloader.core.downloader import SpotifyDownloader`
+   - New: `from spotify_downloader.core.downloader import SpotifyDownloader` (same but located in src/)
+
+3. **API Changes**:
+   - Added proper typing annotations
+   - Introduced standardized logging
+   - Added custom exceptions
+   - Added configuration management
+
+### For Developers:
+- Use `python -m spotify_downloader.cli.main` for module execution
+- Install in development mode with `pip install -e .` to work with the new structure
+- Tests have been reorganized to match the new module structure
 
 ## Notes
 - The project downloads audio from YouTube based on the track name and artist from Spotify.

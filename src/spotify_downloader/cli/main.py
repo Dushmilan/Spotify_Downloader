@@ -1,19 +1,26 @@
-#!/usr/bin/env python3
 """
-Spotify Downloader - Download Spotify tracks, albums, and playlists
+Command-line interface module for the Spotify Downloader.
+
+This module provides the main entry point for the command-line interface,
+allowing users to download Spotify content by providing a URL and optional
+parameters such as output format, quality, and destination directory.
 """
 
 import argparse
 import sys
 import os
-
-# Add src directory to Python path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
-
-from spotify_downloader import SpotifyDownloader
+from typing import NoReturn
+from ..core.downloader import SpotifyDownloader
 
 
-def main():
+def main() -> NoReturn:
+    """
+    Main entry point for the Spotify Downloader CLI.
+
+    Parses command-line arguments and initiates the download process
+    using the SpotifyDownloader class. Handles errors and provides
+    appropriate exit codes.
+    """
     parser = argparse.ArgumentParser(
         description="Download Spotify content as audio files",
         formatter_class=argparse.RawDescriptionHelpFormatter,
