@@ -3,22 +3,27 @@
 Setup script for Spotify Downloader
 """
 
-import subprocess
+from setuptools import setup, find_packages
 import sys
 
 
-def install_dependencies():
-    """
-    Install all required dependencies from requirements.txt
-    """
-    try:
-        # Install using pip
-        subprocess.check_call([sys.executable, "-m", "pip", "install", "-r", "requirements.txt"])
-        print("Dependencies installed successfully!")
-    except subprocess.CalledProcessError as e:
-        print(f"Error installing dependencies: {e}")
-        sys.exit(1)
-
-
-if __name__ == "__main__":
-    install_dependencies()
+setup(
+    name="spotify-downloader",
+    version="1.0.0",
+    description="A tool to download Spotify tracks, albums, and playlists as audio files",
+    author="Qwen",
+    packages=find_packages(where="src"),
+    package_dir={"": "src"},
+    install_requires=[
+        "spotifyscraper",
+        "yt-dlp",
+        "ffmpeg-python",
+        "requests",
+    ],
+    entry_points={
+        "console_scripts": [
+            "spotify-dl=main:main",  # This creates the 'spotify-dl' command
+        ],
+    },
+    python_requires=">=3.6",
+)

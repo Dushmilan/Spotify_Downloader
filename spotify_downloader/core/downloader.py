@@ -1,19 +1,12 @@
 """
-Main orchestrator for the Spotify Downloader
+Core downloader module for the Spotify Downloader
 """
 
 import os
-import sys
-import importlib.util
-
-# Add the src directory to the path to allow importing
-src_dir = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, src_dir)
-
-from url_handler import URLHandler
-from spotify_handler import SpotifyScraper
-from youtube_searcher import YouTubeSearcher
-from file_converter import FileConverter
+from .url_handler import URLHandler
+from .spotify_handler import SpotifyScraper
+from .youtube_searcher import YouTubeSearcher
+from .file_converter import FileConverter
 
 
 class SpotifyDownloader:
@@ -40,7 +33,7 @@ class SpotifyDownloader:
 
         # Create output directory if it doesn't exist
         os.makedirs(self.output_dir, exist_ok=True)
-    
+
     def download(self, url, verbose=False):
         """
         Main method to download Spotify content
@@ -65,7 +58,7 @@ class SpotifyDownloader:
             self._download_playlist(spotify_id, verbose=verbose)
         else:
             raise ValueError(f"Unsupported URL type: {url_type}")
-    
+
     def _download_track(self, track_id, verbose=False):
         """
         Download a single track
@@ -118,7 +111,7 @@ class SpotifyDownloader:
             os.rename(temp_filename + ".mp3", output_filename)
 
         print(f"✓ Downloaded: {os.path.basename(output_filename)}")
-    
+
     def _download_album(self, album_id, verbose=False):
         """
         Download all tracks from an album
@@ -188,7 +181,7 @@ class SpotifyDownloader:
                 print(f"  ✗ Error downloading track {track['title']}: {e}")
 
         print(f"\nAlbum download completed! Saved to: {album_dir}")
-    
+
     def _download_playlist(self, playlist_id, verbose=False):
         """
         Download all tracks from a playlist
