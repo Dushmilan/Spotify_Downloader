@@ -1,0 +1,8 @@
+spotdl
+customtkinter
+pillow
+spotify_scraper
+pytest
+requests
+yt-dlp
+mutagen

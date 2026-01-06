@@ -1,0 +1,32 @@
+# Python stuff
+__pycache__/
+*.py[cod]
+*$py.class
+dist/
+build/
+*.egg-info/
+.venv/
+venv/
+env/
+
+# App results
+downloads/
+settings.json
+.spotdl/
+
+# IDE stuff
+.vscode/
+.idea/
+
+# Research/Temp files
+*.log
+api_bypass_test.py
+test_import*.py
+explore_*.py
+check_*.py
+force_login.py
+get_spotify_code.py
+help.txt
+print_*.py
+spotify.py
+test_yt*.py
