@@ -105,28 +105,62 @@ class SpotDownloader:
             engine = CustomDownloadEngine(self.download_path)
             
             # Identify tracks
+            # Identify tracks
             metadata_list = []
+            
+            # Identify type of URL
             if "spotify.com" in url:
                 try:
                     client = SpotifyClient()
-                    if "track" in url:
+                    
+                    if "playlist" in url or "album" in url:
+                        # Playlist/Album Logic
+                        if "playlist" in url:
+                            info = client.get_playlist_info(url)
+                            folder_name = info.get('name', 'Playlist')
+                        else:
+                            info = client.get_album_info(url)
+                            folder_name = info.get('name', 'Album')
+
+                        if info:
+                            # Sanitize folder name
+                            folder_name = "".join([c for c in folder_name if c.isalnum() or c in (' ', '.', '_', '-')]).strip()
+                            playlist_path = os.path.join(self.download_path, folder_name)
+                            
+                            # Create engine for this playlist
+                            playlist_engine = CustomDownloadEngine(playlist_path)
+                            
+                            tracks = info.get('tracks', [])
+                            if log_callback:
+                                log_callback(f"Found '{folder_name}' with {len(tracks)} tracks. Downloading to: {playlist_path}")
+                            
+                            for i, track in enumerate(tracks):
+                                if log_callback:
+                                    log_callback(f"[{i+1}/{len(tracks)}] Processing: {track.get('name')}")
+                                
+                                success = playlist_engine.download_and_tag(track, progress_callback, log_callback)
+                                if not success and log_callback:
+                                    log_callback(f"Failed: {track.get('name')}")
+                            
+                            if log_callback:
+                                log_callback(f"Playlist '{folder_name}' download complete!")
+                            return
+
+                    # Single Track Logic
+                    elif "track" in url:
                         info = client.get_track_info(url)
                         if info:
                             metadata_list.append(info)
-                    elif "playlist" in url or "album" in url:
-                        # For now, custom engine handles single tracks best. 
-                        # We can expand playlist scraping later if needed.
-                        if log_callback:
-                            log_callback("Playlist scraping is currently limited in bypass mode.")
-                        metadata_list.append({'url': url, 'name': url}) # Fallback
+
                 except Exception as e:
                     if log_callback:
                         log_callback(f"Metadata scraping error: {e}")
             
             if not metadata_list:
-                # Fallback to direct search if no metadata found
+                # Fallback to direct search if no metadata found (or non-Spotify URL)
                 metadata_list.append({'name': url, 'artist': ''})
 
+            # Process single tracks
             for meta in metadata_list:
                 success = engine.download_and_tag(meta, progress_callback, log_callback)
                 if success:
