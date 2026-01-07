@@ -1,4 +1,4 @@
-spotdl
+
 customtkinter
 pillow
 spotify_scraper

@@ -70,63 +70,23 @@ class App(ctk.CTk):
         self.open_current_button = ctk.CTkButton(self.path_frame, text="Open Folder", command=self.open_downloads, width=100)
         self.open_current_button.grid(row=0, column=2, padx=(5, 10), pady=10)
 
-        # Credentials Frame
-        self.cred_frame = ctk.CTkFrame(self)
-        self.cred_frame.grid(row=3, column=0, padx=20, pady=(0, 10), sticky="ew")
-        self.cred_frame.grid_columnconfigure((1, 3), weight=1)
-
-        self.cred_label = ctk.CTkLabel(self.cred_frame, text="Spotify API (Optional):", font=Styles.SUBHEADER_FONT)
-        self.cred_label.grid(row=0, column=0, padx=(10, 5), pady=10)
-
-        self.client_id_entry = ctk.CTkEntry(self.cred_frame, placeholder_text="Client ID")
-        self.client_id_entry.grid(row=0, column=1, padx=5, pady=10, sticky="ew")
-
-        self.client_secret_entry = ctk.CTkEntry(self.cred_frame, placeholder_text="Client Secret", show="*")
-        self.client_secret_entry.grid(row=0, column=3, padx=5, pady=10, sticky="ew")
-
-        self.save_cred_button = ctk.CTkButton(self.cred_frame, text="Save Settings", command=self.save_settings, width=100)
-        self.save_cred_button.grid(row=0, column=4, padx=(5, 10), pady=10)
-
-        # Login Frame (For Anonymous users)
-        self.login_frame = ctk.CTkFrame(self)
-        self.login_frame.grid(row=4, column=0, padx=20, pady=(0, 10), sticky="ew")
-        
-        self.login_info_label = ctk.CTkLabel(self.login_frame, text="Rate Limit Workaround (No API Keys needed)", font=Styles.SMALL_LABEL_FONT)
-        self.login_info_label.pack(pady=(5, 0))
-        
-        self.login_button = ctk.CTkButton(
-            self.login_frame, 
-            text="Login to Spotify (One-time Setup)", 
-            fg_color=Styles.SPOTIFY_GREEN, 
-            hover_color=Styles.SPOTIFY_GREEN_HOVER,
-            command=self.login_spotify
-        )
-        self.login_button.pack(padx=10, pady=10)
-
         # Status Label
         self.status_label = ctk.CTkLabel(self, text="Ready", font=Styles.LABEL_FONT)
-        self.status_label.grid(row=5, column=0, padx=20, pady=5)
+        self.status_label.grid(row=3, column=0, padx=20, pady=5)
 
         # Log Text Area
         self.log_textbox = ctk.CTkTextbox(self, height=200)
-        self.log_textbox.grid(row=6, column=0, padx=20, pady=(5, 20), sticky="nsew")
+        self.log_textbox.grid(row=4, column=0, padx=20, pady=(5, 20), sticky="nsew")
         self.log_textbox.configure(state="disabled")
-
-    def login_spotify(self):
-        self.log("Opening Spotify Login in your browser...")
-        self.downloader.login(log_callback=self.log_finish_callback)
 
     def load_settings(self):
         try:
             if os.path.exists("settings.json"):
                 with open("settings.json", "r") as f:
                     settings = json.load(f)
-                    self.client_id_entry.insert(0, settings.get("client_id", ""))
-                    self.client_secret_entry.insert(0, settings.get("client_secret", ""))
                     download_path = settings.get("download_path", "downloads")
                     self.downloader.set_download_path(download_path)
                     self.path_display.configure(text=os.path.abspath(download_path))
-                    self.update_downloader_creds()
             else:
                 self.path_display.configure(text=os.path.abspath(self.downloader.download_path))
         except Exception as e:
@@ -134,23 +94,16 @@ class App(ctk.CTk):
 
     def save_settings(self):
         settings = {
-            "client_id": self.client_id_entry.get().strip(),
-            "client_secret": self.client_secret_entry.get().strip(),
             "download_path": self.downloader.download_path
         }
         try:
             with open("settings.json", "w") as f:
                 json.dump(settings, f)
-            self.update_downloader_creds()
             self.log("Settings saved successfully!")
         except Exception as e:
             self.log(f"Error saving settings: {e}")
 
-    def update_downloader_creds(self):
-        cid = self.client_id_entry.get().strip()
-        sec = self.client_secret_entry.get().strip()
-        if cid and sec:
-            self.downloader.set_credentials(cid, sec)
+
 
     def log(self, message):
         self.log_textbox.configure(state="normal")
@@ -165,7 +118,10 @@ class App(ctk.CTk):
             self.log("Please enter a URL.")
             return
 
-        self.update_downloader_creds()
+        if not url:
+            self.log("Please enter a URL.")
+            return
+
         self.download_button.configure(state="disabled")
         self.log(f"Initiating download for: {url}")
         self.downloader.download(url, log_callback=self.log_finish_callback)
