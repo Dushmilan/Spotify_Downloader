@@ -5,16 +5,38 @@ from ..utils.tagger import tag_mp3, tag_m4a
 
 class CustomDownloadEngine:
     def __init__(self, download_path="downloads"):
-        self.download_path = download_path
-        if not os.path.exists(self.download_path):
-            os.makedirs(self.download_path)
+        self.default_path = download_path
+        if not os.path.exists(self.default_path):
+            os.makedirs(self.default_path)
 
     def download_and_tag(self, metadata, progress_callback=None, log_callback=None):
         """
         Full pipeline: Search -> Download -> Tag
         """
+        # Determine actual download location (playlist subfolder or default)
+        target_path = metadata.get('output_dir', self.default_path)
+        if not os.path.exists(target_path):
+            os.makedirs(target_path)
+            
         song_name = metadata.get('name')
         artist_name = metadata.get('artist', '')
+        
+        # 1. Check if file already exists
+        file_name = f"{artist_name} - {song_name}"
+        # Sanitize filename
+        file_name = "".join([c for c in file_name if c.isalnum() or c in (' ', '.', '_', '-')]).strip()
+        final_file_path = os.path.join(target_path, f"{file_name}.mp3")
+        
+        print(f"DEBUG: Checking existence for: {final_file_path}")
+
+        if os.path.exists(final_file_path):
+            if log_callback:
+                log_callback(f"Skipping: '{file_name}' already exists in {os.path.basename(target_path)}/")
+            print(f"DEBUG: File exists! Skipping.")
+            if progress_callback:
+                progress_callback(1.0)
+            return True
+
         query = f"{song_name} {artist_name}".strip()
         
         if log_callback:
@@ -31,10 +53,8 @@ class CustomDownloadEngine:
             log_callback(f"Downloading from: {video_url}")
 
         # 2. Download using yt-dlp
-        file_name = f"{artist_name} - {song_name}"
-        # Sanitize filename
-        file_name = "".join([c for c in file_name if c.isalnum() or c in (' ', '.', '_', '-')]).strip()
-        output_path = os.path.join(self.download_path, f"{file_name}.%(ext)s")
+        # file_name is already defined and sanitized above
+        output_path = os.path.join(target_path, f"{file_name}.%(ext)s")
 
         def ydl_progress_hook(d):
             if d['status'] == 'downloading':
@@ -80,7 +100,7 @@ class CustomDownloadEngine:
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 ydl.download([video_url])
             
-            final_file = os.path.join(self.download_path, f"{file_name}.mp3")
+            final_file = os.path.join(target_path, f"{file_name}.mp3")
             
             # 3. Tag the file
             if os.path.exists(final_file):
