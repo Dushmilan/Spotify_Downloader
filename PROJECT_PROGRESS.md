@@ -13,4 +13,24 @@ This file tracks the development progress of the Spot-Downloader Desktop applica
 - [ ] Unit tests for all modules.
 
 ## Next Steps
-- Waiting for user instructions.
+
+### Functionality & Core Logic
+- [ ] **Cancel Functionality**: Allow users to gracefully stop a download session.
+- [ ] **Retry Mechanism**: Option to retry failed downloads.
+- [ ] **Audio Quality & Format Options**: Support for MP3/FLAC/M4A and quality selection.
+- [ ] **Lyrics Embedding**: Embed lyrics or save as .lrc files.
+- [ ] **History & Duplicate Prevention**: Track downloaded files to avoid duplicates.
+
+### User Interface (GUI)
+- [ ] **Settings Panel**: Manage default path, themes, and preferences.
+- [ ] **Visual Feedback**: Display album art and detailed track progress (e.g., "Track 3 of 12").
+- [ ] **System Tray Integration**: Notifications and minimize-to-tray support.
+
+### Architecture & Code Quality
+- [ ] **Configuration Persistence**: Save user preferences (config.json) between sessions.
+- [ ] **Structured Logging**: Replace print statements with proper file-based logging.
+- [ ] **AsyncIO Migration**: Optimize concurrent operations.
+
+### Distribution & DevOps
+- [ ] **CI/CD Pipeline**: Automated testing on GitHub Actions.
+- [ ] **Executable Builder**: PyInstaller script for standalone .exe generation.
