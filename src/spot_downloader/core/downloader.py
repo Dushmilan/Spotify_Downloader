@@ -139,15 +139,28 @@ class SpotDownloader:
                 # Fallback to direct search if no metadata found
                 metadata_list.append({'name': url, 'artist': ''})
 
-            for meta in metadata_list:
+            total_items = len(metadata_list)
+            
+            for i, meta in enumerate(metadata_list):
                 print(f"DEBUG: Processing track: {meta.get('name')} in {meta.get('output_dir', 'default')}")
-                success = engine.download_and_tag(meta, progress_callback, log_callback)
+                
+                # Create a wrapper for progress to show overall playlist progress
+                def track_progress_callback(val):
+                    if progress_callback:
+                        # (completed_items + current_item_progress) / total
+                        overall = (i + val) / total_items
+                        progress_callback(overall)
+
+                success = engine.download_and_tag(meta, track_progress_callback, log_callback)
                 if success:
                     if log_callback:
                         log_callback(f"Download of '{meta.get('name')}' completed successfully!")
                 else:
                     if log_callback:
                         log_callback(f"Failed to download: {meta.get('name')}")
+            
+            if progress_callback:
+                progress_callback(1.0)
             
             # Cleanup cache
             if cache_file_path and os.path.exists(cache_file_path):

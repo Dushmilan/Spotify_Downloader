@@ -70,13 +70,18 @@ class App(ctk.CTk):
         self.open_current_button = ctk.CTkButton(self.path_frame, text="Open Folder", command=self.open_downloads, width=100)
         self.open_current_button.grid(row=0, column=2, padx=(5, 10), pady=10)
 
+        # Progress Bar
+        self.progress_bar = ctk.CTkProgressBar(self)
+        self.progress_bar.grid(row=3, column=0, padx=20, pady=(10, 0), sticky="ew")
+        self.progress_bar.set(0)
+
         # Status Label
         self.status_label = ctk.CTkLabel(self, text="Ready", font=Styles.LABEL_FONT)
-        self.status_label.grid(row=3, column=0, padx=20, pady=5)
+        self.status_label.grid(row=4, column=0, padx=20, pady=5)
 
         # Log Text Area
         self.log_textbox = ctk.CTkTextbox(self, height=200)
-        self.log_textbox.grid(row=4, column=0, padx=20, pady=(5, 20), sticky="nsew")
+        self.log_textbox.grid(row=5, column=0, padx=20, pady=(5, 20), sticky="nsew")
         self.log_textbox.configure(state="disabled")
 
     def load_settings(self):
@@ -103,7 +108,8 @@ class App(ctk.CTk):
         except Exception as e:
             self.log(f"Error saving settings: {e}")
 
-
+    def update_progress(self, value):
+        self.after(0, lambda: self.progress_bar.set(value))
 
     def log(self, message):
         self.log_textbox.configure(state="normal")
@@ -118,13 +124,10 @@ class App(ctk.CTk):
             self.log("Please enter a URL.")
             return
 
-        if not url:
-            self.log("Please enter a URL.")
-            return
-
         self.download_button.configure(state="disabled")
+        self.progress_bar.set(0)
         self.log(f"Initiating download for: {url}")
-        self.downloader.download(url, log_callback=self.log_finish_callback)
+        self.downloader.download(url, progress_callback=self.update_progress, log_callback=self.log_finish_callback)
 
     def log_finish_callback(self, message):
         self.after(0, lambda: self.log(message))

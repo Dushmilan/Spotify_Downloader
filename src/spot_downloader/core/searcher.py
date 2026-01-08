@@ -1,4 +1,5 @@
 import yt_dlp
+import difflib
 
 class YouTubeSearcher:
     @staticmethod
@@ -55,18 +56,30 @@ class YouTubeSearcher:
                     if diff > 60: 
                         continue
                     
+                    # Calculate string similarity
+                    # We compare the query (Song Artist) with the Video Title
+                    similarity = difflib.SequenceMatcher(None, query.lower(), v['title'].lower()).ratio()
+                    
+                    # Base score is duration difference (lower is better)
                     score = diff
+                    
+                    # Weighted impact of title similarity (Higher similarity = Lower Score)
+                    # A perfect match reduces score (improves rank) by 20 "seconds"
+                    score -= (similarity * 20)
+                    
                     # Reward "Official Audio" or "Topic" in title
                     title_lower = v['title'].lower()
                     if "official audio" in title_lower or "topic" in title_lower:
-                        score *= 0.5 
+                        score -= 5 # Bonus 5 "seconds"
                     
                     matches.append((score, v))
                 
                 if matches:
                     matches.sort(key=lambda x: x[0])
-                    best_match = matches[0][1]
-                    return best_match['url']
+                    # Debug print to verify logic
+                    best = matches[0]
+                    # print(f"DEBUG: Best match score: {best[0]:.2f} | Title: {best[1]['title']}") 
+                    return best[1]['url']
             
             # Fallback to first result
             return videos[0]['url']

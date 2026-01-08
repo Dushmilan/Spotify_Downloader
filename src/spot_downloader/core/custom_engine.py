@@ -58,28 +58,31 @@ class CustomDownloadEngine:
 
         def ydl_progress_hook(d):
             if d['status'] == 'downloading':
-                # Log size in MB
-                total_bytes = d.get('total_bytes') or d.get('total_bytes_estimate', 0)
-                downloaded_bytes = d.get('downloaded_bytes', 0)
+                # Calculate progress
+                total = d.get('total_bytes') or d.get('total_bytes_estimate', 0)
+                downloaded = d.get('downloaded_bytes', 0)
                 
-                if total_bytes > 0:
-                    mb_total = total_bytes / (1024 * 1024)
-                    mb_downloaded = downloaded_bytes / (1024 * 1024)
-                    if log_callback and downloaded_bytes % (1024 * 1024) < 100000: # Throttle logs to roughly every 1MB
-                        log_callback(f"Download Progress: {mb_downloaded:.2f}MB / {mb_total:.2f}MB")
+                progress_val = 0.0
+                if total > 0:
+                    progress_val = downloaded / total
+
+                # Log size in MB (Throttle logs)
+                if total > 0:
+                    mb_total = total / (1024 * 1024)
+                    mb_downloaded = downloaded / (1024 * 1024)
+                    if log_callback and downloaded % (1024 * 1024) < 100000: # Throttle logs
+                         pass # Reducing log spam for GUI
 
                 if progress_callback:
-                    p = d.get('_percent_str', '0%').replace('%','').strip()
                     try:
-                        progress_callback(float(p) / 100)
+                        progress_callback(progress_val)
                     except:
                         pass
             elif d['status'] == 'finished':
                 if log_callback:
-                    # Final size log
-                    final_bytes = d.get('total_bytes') or d.get('downloaded_bytes', 0)
-                    mb_final = final_bytes / (1024 * 1024)
-                    log_callback(f"Download complete ({mb_final:.2f}MB), post-processing...")
+                    log_callback("Download complete, converting...")
+                if progress_callback:
+                    progress_callback(1.0)
 
         ydl_opts = {
             'format': 'bestaudio/best',
