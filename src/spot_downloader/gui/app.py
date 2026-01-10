@@ -47,6 +47,17 @@ class App(ctk.CTk):
         self.download_button = ctk.CTkButton(self.input_frame, text="Download", command=self.start_download)
         self.download_button.grid(row=0, column=1, padx=(5, 5), pady=10)
 
+        self.cancel_button = ctk.CTkButton(
+            self.input_frame, 
+            text="Cancel", 
+            command=self.cancel_download, 
+            fg_color="#D32F2F", # Red color
+            hover_color="#B71C1C",
+            width=80,
+            state="disabled"
+        )
+        self.cancel_button.grid(row=0, column=2, padx=(5, 5), pady=10)
+
         self.select_destination_button = ctk.CTkButton(
             self.input_frame, 
             text="Select Destination", 
@@ -54,7 +65,7 @@ class App(ctk.CTk):
             fg_color=Styles.TRANSPARENT, 
             border_width=2
         )
-        self.select_destination_button.grid(row=0, column=2, padx=(5, 10), pady=10)
+        self.select_destination_button.grid(row=0, column=3, padx=(5, 10), pady=10)
 
         # Path Selection Frame
         self.path_frame = ctk.CTkFrame(self)
@@ -125,14 +136,21 @@ class App(ctk.CTk):
             return
 
         self.download_button.configure(state="disabled")
+        self.cancel_button.configure(state="normal")
         self.progress_bar.set(0)
         self.log(f"Initiating download for: {url}")
         self.downloader.download(url, progress_callback=self.update_progress, log_callback=self.log_finish_callback)
 
+    def cancel_download(self):
+        self.log("Cancelling download...")
+        self.cancel_button.configure(state="disabled")
+        self.downloader.cancel()
+
     def log_finish_callback(self, message):
         self.after(0, lambda: self.log(message))
-        if any(kw in message.lower() for kw in ["completed", "error", "finished"]):
+        if any(kw in message.lower() for kw in ["completed", "error", "finished", "cancelled"]):
             self.after(0, lambda: self.download_button.configure(state="normal"))
+            self.after(0, lambda: self.cancel_button.configure(state="disabled"))
 
     def open_downloads(self):
         download_path = os.path.abspath(self.downloader.download_path)

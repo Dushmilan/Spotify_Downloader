@@ -27,10 +27,8 @@ This file tracks the development progress of the Spot-Downloader Desktop applica
 - [ ] **System Tray Integration**: Notifications and minimize-to-tray support.
 
 ### Architecture & Code Quality
-- [ ] **Configuration Persistence**: Save user preferences (config.json) between sessions.
 - [ ] **Structured Logging**: Replace print statements with proper file-based logging.
 - [ ] **AsyncIO Migration**: Optimize concurrent operations.
 
 ### Distribution & DevOps
-- [ ] **CI/CD Pipeline**: Automated testing on GitHub Actions.
 - [ ] **Executable Builder**: PyInstaller script for standalone .exe generation.

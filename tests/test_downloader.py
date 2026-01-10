@@ -1,8 +1,8 @@
 import os
 import sys
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'src')))
 
-from core.downloader import SpotDownloader
+from spot_downloader.core.downloader import SpotDownloader
 
 def test_downloader_init():
     downloader = SpotDownloader(download_path="test_downloads")

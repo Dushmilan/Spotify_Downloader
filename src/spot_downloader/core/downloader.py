@@ -7,6 +7,7 @@ class SpotDownloader:
         self.download_path = download_path
         self.client_id = None
         self.client_secret = None
+        self._cancel_event = threading.Event()
         if not os.path.exists(self.download_path):
             os.makedirs(self.download_path)
 
@@ -14,6 +15,14 @@ class SpotDownloader:
         self.download_path = new_path
         if not os.path.exists(self.download_path):
             os.makedirs(self.download_path)
+
+    def set_credentials(self, client_id, client_secret):
+        self.client_id = client_id
+        self.client_secret = client_secret
+
+    def cancel(self):
+        """Cancels the ongoing download."""
+        self._cancel_event.set()
 
     def download(self, url, progress_callback=None, log_callback=None):
         """
@@ -23,6 +32,7 @@ class SpotDownloader:
         from spotify_scraper import SpotifyClient
 
         def run():
+            self._cancel_event.clear()
             cache_file_path = None
             if log_callback:
                 log_callback(f"Initiating download for: {url}")
@@ -78,6 +88,9 @@ class SpotDownloader:
 
                                 skipped_count = 0
                                 for item in tracks:
+                                    if self._cancel_event.is_set():
+                                        break
+
                                     track_data = item.get('track', item)
                                     if not track_data or not isinstance(track_data, dict):
                                         continue
@@ -135,13 +148,18 @@ class SpotDownloader:
                     if log_callback:
                         log_callback(f"Metadata scraping error: {e}")
             
-            if not metadata_list:
+            if not metadata_list and not self._cancel_event.is_set():
                 # Fallback to direct search if no metadata found
                 metadata_list.append({'name': url, 'artist': ''})
 
             total_items = len(metadata_list)
             
             for i, meta in enumerate(metadata_list):
+                if self._cancel_event.is_set():
+                    if log_callback:
+                        log_callback("Download cancelled.")
+                    break
+
                 print(f"DEBUG: Processing track: {meta.get('name')} in {meta.get('output_dir', 'default')}")
                 
                 # Create a wrapper for progress to show overall playlist progress
@@ -151,16 +169,22 @@ class SpotDownloader:
                         overall = (i + val) / total_items
                         progress_callback(overall)
 
-                success = engine.download_and_tag(meta, track_progress_callback, log_callback)
+                success = engine.download_and_tag(meta, track_progress_callback, log_callback, self._cancel_event)
                 if success:
                     if log_callback:
                         log_callback(f"Download of '{meta.get('name')}' completed successfully!")
                 else:
+                    if self._cancel_event.is_set():
+                        # Already logged "cancelled" in engine or check above
+                        break
                     if log_callback:
                         log_callback(f"Failed to download: {meta.get('name')}")
             
             if progress_callback:
-                progress_callback(1.0)
+                if self._cancel_event.is_set():
+                    progress_callback(0)
+                else:
+                    progress_callback(1.0)
             
             # Cleanup cache
             if cache_file_path and os.path.exists(cache_file_path):

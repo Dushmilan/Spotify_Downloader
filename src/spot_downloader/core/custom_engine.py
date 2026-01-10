@@ -9,7 +9,7 @@ class CustomDownloadEngine:
         if not os.path.exists(self.default_path):
             os.makedirs(self.default_path)
 
-    def download_and_tag(self, metadata, progress_callback=None, log_callback=None):
+    def download_and_tag(self, metadata, progress_callback=None, log_callback=None, cancel_event=None):
         """
         Full pipeline: Search -> Download -> Tag
         """
@@ -37,6 +37,11 @@ class CustomDownloadEngine:
                 progress_callback(1.0)
             return True
 
+        if cancel_event and cancel_event.is_set():
+            if log_callback:
+                log_callback("Download cancelled.")
+            return False
+
         query = f"{song_name} {artist_name}".strip()
         
         if log_callback:
@@ -57,6 +62,9 @@ class CustomDownloadEngine:
         output_path = os.path.join(target_path, f"{file_name}.%(ext)s")
 
         def ydl_progress_hook(d):
+            if cancel_event and cancel_event.is_set():
+                raise Exception("Download cancelled by user")
+
             if d['status'] == 'downloading':
                 # Calculate progress
                 total = d.get('total_bytes') or d.get('total_bytes_estimate', 0)
@@ -119,6 +127,10 @@ class CustomDownloadEngine:
                 return False
 
         except Exception as e:
+            if "cancelled by user" in str(e).lower():
+                if log_callback:
+                    log_callback("Download cancelled.")
+                return False
             if log_callback:
                 log_callback(f"Download error: {str(e)}")
             return False
