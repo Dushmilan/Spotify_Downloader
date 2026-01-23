@@ -19,6 +19,6 @@ def test_scraper_functionality():
         assert "name" in info
         assert "artists" in info
     except Exception as e:
-        # If network fails, we skip rather than fail the build, 
+        # If network fails, we skip rather than fail the build,
         # but for a local test we want to know
         print(f"Scraper network/API error: {e}")
