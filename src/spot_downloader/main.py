@@ -1,11 +1,14 @@
 import sys
 from .gui.app import App
+from .config import app_config
 
 def main():
     """
     Main entry point for the Spot-Downloader package.
     """
     try:
+        # Initialize configuration
+        print(f"Starting Spot-Downloader v{app_config.get('version', '1.0.0')}")
         app = App()
         app.mainloop()
     except KeyboardInterrupt:

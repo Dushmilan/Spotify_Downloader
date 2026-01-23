@@ -6,3 +6,4 @@ pytest
 requests
 yt-dlp
 mutagen
+urllib3

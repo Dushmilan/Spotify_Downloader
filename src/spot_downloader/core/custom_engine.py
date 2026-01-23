@@ -2,6 +2,8 @@ import os
 import yt_dlp
 from .searcher import YouTubeSearcher
 from ..utils.tagger import tag_mp3, tag_m4a
+from ..utils.validation import sanitize_filename
+from ..config import app_config
 
 class CustomDownloadEngine:
     def __init__(self, download_path="downloads"):
@@ -17,38 +19,46 @@ class CustomDownloadEngine:
         target_path = metadata.get('output_dir', self.default_path)
         if not os.path.exists(target_path):
             os.makedirs(target_path)
-            
-        song_name = metadata.get('name')
-        artist_name = metadata.get('artist', '')
-        
+
+        song_name = metadata.get('name', 'Unknown Song')
+        artist_name = metadata.get('artist', 'Unknown Artist')
+
         # 1. Check if file already exists
         file_name = f"{artist_name} - {song_name}"
-        # Sanitize filename
-        file_name = "".join([c for c in file_name if c.isalnum() or c in (' ', '.', '_', '-')]).strip()
+        # Sanitize filename to prevent directory traversal and invalid characters
+        file_name = sanitize_filename(file_name)
+        if not file_name or file_name.isspace():
+            file_name = "Unknown_Artist - Unknown_Song"
+
         final_file_path = os.path.join(target_path, f"{file_name}.mp3")
-        
-        print(f"DEBUG: Checking existence for: {final_file_path}")
+
+        if log_callback:
+            log_callback(f"Checking existence for: {file_name}")
 
         if os.path.exists(final_file_path):
             if log_callback:
                 log_callback(f"Skipping: '{file_name}' already exists in {os.path.basename(target_path)}/")
-            print(f"DEBUG: File exists! Skipping.")
             if progress_callback:
                 progress_callback(1.0)
             return True
 
         query = f"{song_name} {artist_name}".strip()
-        
+
         if log_callback:
             log_callback(f"Searching for better match: {query}...")
-            
+
         # 1. Search for best match
-        video_url = YouTubeSearcher.search_ytm(query, duration_ms=metadata.get('duration_ms'))
-        if not video_url:
+        try:
+            video_url = YouTubeSearcher.search_ytm(query, duration_ms=metadata.get('duration_ms'))
+            if not video_url:
+                if log_callback:
+                    log_callback("Error: No match found on YouTube Music.")
+                return False
+        except Exception as e:
             if log_callback:
-                log_callback("Error: No match found on YouTube Music.")
+                log_callback(f"Search error: {str(e)}")
             return False
-            
+
         if log_callback:
             log_callback(f"Downloading from: {video_url}")
 
@@ -61,7 +71,7 @@ class CustomDownloadEngine:
                 # Log size in MB
                 total_bytes = d.get('total_bytes') or d.get('total_bytes_estimate', 0)
                 downloaded_bytes = d.get('downloaded_bytes', 0)
-                
+
                 if total_bytes > 0:
                     mb_total = total_bytes / (1024 * 1024)
                     mb_downloaded = downloaded_bytes / (1024 * 1024)
@@ -72,7 +82,7 @@ class CustomDownloadEngine:
                     p = d.get('_percent_str', '0%').replace('%','').strip()
                     try:
                         progress_callback(float(p) / 100)
-                    except:
+                    except (ValueError, TypeError):
                         pass
             elif d['status'] == 'finished':
                 if log_callback:
@@ -81,27 +91,38 @@ class CustomDownloadEngine:
                     mb_final = final_bytes / (1024 * 1024)
                     log_callback(f"Download complete ({mb_final:.2f}MB), post-processing...")
 
+        # Map quality setting to yt-dlp format
+        quality_map = {
+            '128kbps': '128',
+            '256kbps': '256',
+            '320kbps': '320'
+        }
+        preferred_quality = quality_map.get(app_config.download_quality, '320')
+
         ydl_opts = {
             'format': 'bestaudio/best',
             'outtmpl': output_path,
             'postprocessors': [{
                 'key': 'FFmpegExtractAudio',
-                'preferredcodec': 'mp3',
-                'preferredquality': '320', # Replicating spotdl's 320kbps upscaling
+                'preferredcodec': app_config.file_format,
+                'preferredquality': preferred_quality,
             }],
             # Using '0' for audio-quality ensures the best VBR/CBR encoding
-            'audio_quality': 0, 
+            'audio_quality': 0,
             'progress_hooks': [ydl_progress_hook],
             'quiet': True,
             'no_warnings': True,
+            'socket_timeout': app_config.timeout_seconds,  # Timeout for network operations from config
+            'connect_timeout': app_config.timeout_seconds,  # Connection timeout from config
+            'retries': app_config.retry_attempts,  # Number of retries for failed downloads from config
         }
 
         try:
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 ydl.download([video_url])
-            
+
             final_file = os.path.join(target_path, f"{file_name}.mp3")
-            
+
             # 3. Tag the file
             if os.path.exists(final_file):
                 if log_callback:
@@ -115,7 +136,11 @@ class CustomDownloadEngine:
                     log_callback("Error: Downloaded file not found after conversion.")
                 return False
 
+        except yt_dlp.DownloadError as e:
+            if log_callback:
+                log_callback(f"Download error (yt-dlp): {str(e)}")
+            return False
         except Exception as e:
             if log_callback:
-                log_callback(f"Download error: {str(e)}")
+                log_callback(f"Unexpected download error: {str(e)}")
             return False

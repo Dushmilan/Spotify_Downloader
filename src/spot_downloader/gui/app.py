@@ -3,9 +3,11 @@ import os
 import subprocess
 import json
 from tkinter import messagebox
+import threading
 
-from ..core.downloader import SpotDownloader
+from ..services.download_service import DownloadService, ValidationService
 from ..utils.helpers import check_ffmpeg
+from ..config import app_config
 from .styles import Styles
 
 class App(ctk.CTk):
@@ -14,17 +16,18 @@ class App(ctk.CTk):
 
         self.title("Spot-Downloader Desktop")
         self.geometry("750x700")
-        
+
         # Apply professional theme from styles
         Styles.apply_theme()
 
-        self.downloader = SpotDownloader()
+        self.download_service = DownloadService()
+        self.download_thread = None
         self.setup_ui()
         self.load_settings()
 
         if not check_ffmpeg():
             self.after(1000, lambda: messagebox.showwarning(
-                "FFmpeg Missing", 
+                "FFmpeg Missing",
                 "FFmpeg was not found. Please install FFmpeg and add it to your PATH."
             ))
 
@@ -48,10 +51,10 @@ class App(ctk.CTk):
         self.download_button.grid(row=0, column=1, padx=(5, 5), pady=10)
 
         self.select_destination_button = ctk.CTkButton(
-            self.input_frame, 
-            text="Select Destination", 
-            command=self.select_folder, 
-            fg_color=Styles.TRANSPARENT, 
+            self.input_frame,
+            text="Select Destination",
+            command=self.select_folder,
+            fg_color=Styles.TRANSPARENT,
             border_width=2
         )
         self.select_destination_button.grid(row=0, column=2, padx=(5, 10), pady=10)
@@ -79,31 +82,40 @@ class App(ctk.CTk):
         self.log_textbox.grid(row=4, column=0, padx=20, pady=(5, 20), sticky="nsew")
         self.log_textbox.configure(state="disabled")
 
+        # Add a progress bar for better UX
+        self.progress_bar = ctk.CTkProgressBar(self)
+        self.progress_bar.grid(row=5, column=0, padx=20, pady=(0, 10), sticky="ew")
+        self.progress_bar.set(0)  # Initially set to 0
+        self.progress_bar.grid_remove()  # Hide initially
+
     def load_settings(self):
         try:
             if os.path.exists("settings.json"):
                 with open("settings.json", "r") as f:
                     settings = json.load(f)
-                    download_path = settings.get("download_path", "downloads")
-                    self.downloader.set_download_path(download_path)
+                    download_path = settings.get("download_path", app_config.download_path)
+                    self.download_service.set_download_path(download_path)
                     self.path_display.configure(text=os.path.abspath(download_path))
+                    # Update config with loaded settings
+                    app_config.set("download_path", download_path)
             else:
-                self.path_display.configure(text=os.path.abspath(self.downloader.download_path))
+                self.path_display.configure(text=os.path.abspath(self.download_service.download_path))
         except Exception as e:
             self.log(f"Error loading settings: {e}")
 
     def save_settings(self):
         settings = {
-            "download_path": self.downloader.download_path
+            "download_path": self.download_service.download_path
         }
         try:
             with open("settings.json", "w") as f:
                 json.dump(settings, f)
+            # Also save to the app config
+            app_config.update(settings)
+            app_config.save_config()
             self.log("Settings saved successfully!")
         except Exception as e:
             self.log(f"Error saving settings: {e}")
-
-
 
     def log(self, message):
         self.log_textbox.configure(state="normal")
@@ -118,17 +130,54 @@ class App(ctk.CTk):
             self.log("Please enter a URL.")
             return
 
+        # Validate URL format if safe mode is enabled
+        if app_config.safe_mode and not ValidationService.validate_spotify_url(url):
+            self.log("Invalid Spotify URL. Please enter a valid Spotify track, playlist, or album URL.")
+            return
+
+        # Disable UI elements during download
         self.download_button.configure(state="disabled")
+        self.url_entry.configure(state="disabled")
+        self.select_destination_button.configure(state="disabled")
+
+        # Show progress bar
+        self.progress_bar.grid()
+        self.progress_bar.set(0)
+
         self.log(f"Initiating download for: {url}")
-        self.downloader.download(url, log_callback=self.log_finish_callback)
+
+        # Start download in a separate thread to keep UI responsive
+        self.download_thread = self.download_service.download(url, log_callback=self.log_finish_callback)
 
     def log_finish_callback(self, message):
-        self.after(0, lambda: self.log(message))
-        if any(kw in message.lower() for kw in ["completed", "error", "finished"]):
-            self.after(0, lambda: self.download_button.configure(state="normal"))
+        self.after(0, lambda: self.update_ui_with_message(message))
+
+        if any(kw in message.lower() for kw in ["completed", "error", "finished", "all downloads finished"]):
+            self.after(0, self.reset_ui_after_download)
+
+    def update_ui_with_message(self, message):
+        """Update UI elements based on log messages"""
+        self.log(message)
+
+        # Update progress based on message content
+        if "download complete" in message.lower():
+            self.progress_bar.set(1.0)
+        elif "downloading" in message.lower():
+            # Simple progress indication - in a real app, you'd have actual progress
+            current_val = self.progress_bar.get()
+            if current_val < 0.8:  # Don't exceed 80% until final completion
+                self.progress_bar.set(current_val + 0.1)
+
+    def reset_ui_after_download(self):
+        """Reset UI elements after download completion"""
+        self.download_button.configure(state="normal")
+        self.url_entry.configure(state="normal")
+        self.select_destination_button.configure(state="normal")
+        self.progress_bar.grid_remove()
+        self.progress_bar.set(0)
 
     def open_downloads(self):
-        download_path = os.path.abspath(self.downloader.download_path)
+        download_path = os.path.abspath(self.download_service.download_path)
         if not os.path.exists(download_path):
             os.makedirs(download_path)
         if os.name == 'nt':
@@ -139,7 +188,11 @@ class App(ctk.CTk):
     def select_folder(self):
         new_path = ctk.filedialog.askdirectory()
         if new_path:
-            self.downloader.set_download_path(new_path)
-            self.path_display.configure(text=os.path.abspath(new_path))
-            self.log(f"Destination changed to: {new_path}")
-            self.save_settings()
+            try:
+                self.download_service.set_download_path(new_path)
+                self.path_display.configure(text=os.path.abspath(new_path))
+                self.log(f"Destination changed to: {new_path}")
+                self.save_settings()
+            except ValueError as e:
+                messagebox.showerror("Invalid Path", str(e))
+                self.log(f"Error setting download path: {e}")

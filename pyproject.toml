@@ -24,6 +24,7 @@ dependencies = [
     "spotify_scraper",
     "requests",
     "pillow",
+    "urllib3",
 ]
 
 [project.urls]
