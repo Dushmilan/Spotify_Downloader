@@ -81,7 +81,8 @@ class CustomDownloadEngine:
                 if progress_callback:
                     p = d.get('_percent_str', '0%').replace('%','').strip()
                     try:
-                        progress_callback(float(p) / 100)
+                        progress_val = float(p) / 100
+                        progress_callback(progress_val)
                     except (ValueError, TypeError):
                         pass
             elif d['status'] == 'finished':

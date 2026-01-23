@@ -35,24 +35,61 @@ class SpotDownloader:
         if not os.path.exists(self.download_path):
             os.makedirs(self.download_path)
 
-    def _download_track(self, meta, engine, progress_callback=None, log_callback=None):
+    def _download_track(self, meta, engine, progress_callback=None, log_callback=None, tracker=None):
         """Helper function to download a single track, suitable for ThreadPoolExecutor."""
+        track_name = meta.get('name', 'Unknown Track')
+        track_artist = meta.get('artist', 'Unknown Artist')
+
+        # Generate a unique ID for this download
+        import uuid
+        download_id = str(uuid.uuid4())
+
         try:
+            # Add to tracker
+            if tracker:
+                tracker.add_download(download_id, track_name, track_artist)
+                tracker.update_status(download_id, 'downloading')
+
+                # Register callbacks to update the tracker
+                def progress_update(progress):
+                    if tracker:
+                        tracker.update_progress(download_id, progress)
+
+                def status_update(status):
+                    if tracker:
+                        tracker.update_status(download_id, status)
+
+                # Modify the progress callback to also update the tracker
+                original_progress_callback = progress_callback
+                def combined_progress_callback(progress):
+                    if original_progress_callback:
+                        original_progress_callback(progress)
+                    progress_update(progress)
+
+                progress_callback = combined_progress_callback
+
             if log_callback:
-                log_callback(f"Processing track: {meta.get('name', 'Unknown Track')} in {meta.get('output_dir', 'default')}")
+                log_callback(f"Processing track: {track_name} in {meta.get('output_dir', 'default')}")
+
             success = engine.download_and_tag(meta, progress_callback, log_callback)
             if success:
                 if log_callback:
-                    log_callback(f"Download of '{meta.get('name', 'Unknown Track')}' completed successfully!")
+                    log_callback(f"Download of '{track_name}' completed successfully!")
+                if tracker:
+                    tracker.update_status(download_id, 'completed')
             else:
                 if log_callback:
-                    log_callback(f"Failed to download: {meta.get('name', 'Unknown Track')}")
+                    log_callback(f"Failed to download: {track_name}")
+                if tracker:
+                    tracker.set_error(download_id, "Download failed")
             return success
         except Exception as e:
-            handle_download_error(e, log_callback, f"Downloading {meta.get('name', 'Unknown Track')}")
+            handle_download_error(e, log_callback, f"Downloading {track_name}")
+            if tracker:
+                tracker.set_error(download_id, str(e))
             return False
 
-    def download(self, url, progress_callback=None, log_callback=None):
+    def download(self, url, progress_callback=None, log_callback=None, tracker=None):
         """
         Downloads a song or playlist concurrently using the Custom Engine.
         Spotify metadata fetching is replaced with hardcoded fake data for testing.
@@ -323,7 +360,7 @@ class SpotDownloader:
                         log_callback(f"Starting concurrent download of {len(metadata_list)} tracks...")
                     with concurrent.futures.ThreadPoolExecutor(max_workers=app_config.max_concurrent_downloads) as executor:
                         # Submit all download tasks
-                        future_to_meta = {executor.submit(self._download_track, meta, engine, progress_callback, log_callback): meta for meta in metadata_list}
+                        future_to_meta = {executor.submit(self._download_track, meta, engine, progress_callback, log_callback, tracker): meta for meta in metadata_list}
 
                         for future in concurrent.futures.as_completed(future_to_meta):
                             meta = future_to_meta[future]
@@ -336,7 +373,7 @@ class SpotDownloader:
                 else:
                     # Fallback to single download for single tracks or errors
                     for meta in metadata_list:
-                        self._download_track(meta, engine, progress_callback, log_callback)
+                        self._download_track(meta, engine, progress_callback, log_callback, tracker)
 
             except Exception as e:
                 handle_download_error(e, log_callback, "Main download process")

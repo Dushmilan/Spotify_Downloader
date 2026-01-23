@@ -8,6 +8,7 @@ import threading
 from ..services.download_service import DownloadService, ValidationService
 from ..utils.helpers import check_ffmpeg
 from ..config import app_config
+from ..tracker import DownloadTracker, DownloadStatus
 from .styles import Styles
 
 class App(ctk.CTk):
@@ -24,6 +25,13 @@ class App(ctk.CTk):
         self.download_thread = None
         self.setup_ui()
         self.load_settings()
+        # Initialize download tracking
+        self.current_downloads = {}  # Track ongoing downloads
+        self.completed_downloads = []  # Track completed downloads
+        self.failed_downloads = []  # Track failed downloads
+
+        # Register the change callback with the tracker
+        self.download_service.tracker.set_on_change_callback(self.on_tracker_change)
 
         if not check_ffmpeg():
             self.after(1000, lambda: messagebox.showwarning(
@@ -82,17 +90,25 @@ class App(ctk.CTk):
         self.log_textbox.grid(row=4, column=0, padx=20, pady=(5, 20), sticky="nsew")
         self.log_textbox.configure(state="disabled")
 
-        # Add a progress bar for better UX
-        # Progress bar for overall download progress
-        self.progress_bar = ctk.CTkProgressBar(self)
-        self.progress_bar.grid(row=5, column=0, padx=20, pady=(0, 10), sticky="ew")
-        self.progress_bar.set(0)  # Initially set to 0
-        self.progress_bar.grid_remove()  # Hide initially
+        # Overall progress bar for all downloads
+        self.overall_progress_bar = ctk.CTkProgressBar(self)
+        self.overall_progress_bar.grid(row=5, column=0, padx=20, pady=(0, 5), sticky="ew")
+        self.overall_progress_bar.set(0)  # Initially set to 0
+        self.overall_progress_bar.grid_remove()  # Hide initially
 
-        # Add a label to show progress percentage
-        self.progress_label = ctk.CTkLabel(self, text="0%", font=Styles.LABEL_FONT)
-        self.progress_label.grid(row=6, column=0, padx=20, pady=(0, 10), sticky="ew")
-        self.progress_label.grid_remove()  # Hide initially
+        # Label to show overall progress percentage
+        self.overall_progress_label = ctk.CTkLabel(self, text="0/0 tracks", font=Styles.LABEL_FONT)
+        self.overall_progress_label.grid(row=6, column=0, padx=20, pady=(0, 10), sticky="ew")
+        self.overall_progress_label.grid_remove()  # Hide initially
+
+        # Frame for individual download progress
+        self.downloads_frame = ctk.CTkScrollableFrame(self, height=150)
+        self.downloads_frame.grid(row=7, column=0, padx=20, pady=(0, 10), sticky="ew")
+        self.downloads_frame.grid_remove()  # Hide initially
+
+        # Label for the downloads frame
+        self.downloads_frame_label = ctk.CTkLabel(self.downloads_frame, text="Active Downloads:", font=Styles.LABEL_FONT)
+        self.downloads_frame_label.grid(row=0, column=0, sticky="w", padx=5, pady=5)
 
     def load_settings(self):
         try:
@@ -146,14 +162,47 @@ class App(ctk.CTk):
         self.url_entry.configure(state="disabled")
         self.select_destination_button.configure(state="disabled")
 
-        # Show progress bar
-        self.progress_bar.grid()
-        self.progress_bar.set(0)
+        # Show progress bars
+        self.overall_progress_bar.grid()
+        self.overall_progress_label.grid()
+        self.downloads_frame.grid()
+        self.overall_progress_bar.set(0)
+        self.overall_progress_label.configure(text="0/0 tracks")
 
         self.log(f"Initiating download for: {url}")
 
         # Start download in a separate thread to keep UI responsive
         self.download_thread = self.download_service.download(url, log_callback=self.log_finish_callback)
+
+    def on_tracker_change(self):
+        """Called when the tracker changes."""
+        # Use after to schedule the UI update in the main thread
+        self.after(0, self.update_ui_from_tracker)
+
+    def update_ui_from_tracker(self):
+        """Update the UI based on the tracker."""
+        # Get the tracker from the download service
+        tracker = self.download_service.tracker
+
+        # Get all downloads
+        all_downloads = tracker.get_all_downloads()
+
+        # Add new downloads to the UI
+        for download in all_downloads:
+            if download.id not in self.current_downloads:
+                # Add this download to the UI
+                self.add_download_progress(download.id, download.title, download.artist)
+
+        # Update progress for all current downloads
+        for download in all_downloads:
+            if download.id in self.current_downloads:
+                self.update_download_progress(download.id, download.progress)
+
+        # Update overall progress
+        summary = tracker.get_summary()
+        total = len(all_downloads)
+        completed = summary.get('completed', 0)
+        self.update_overall_progress(completed, total)
 
     def log_finish_callback(self, message):
         self.after(0, lambda: self.update_ui_with_message(message))
@@ -185,10 +234,80 @@ class App(ctk.CTk):
         self.download_button.configure(state="normal")
         self.url_entry.configure(state="normal")
         self.select_destination_button.configure(state="normal")
-        self.progress_bar.grid_remove()
-        self.progress_label.grid_remove()
-        self.progress_bar.set(0)
-        self.progress_label.configure(text="0%")
+        self.overall_progress_bar.grid_remove()
+        self.overall_progress_label.grid_remove()
+        self.downloads_frame.grid_remove()
+        self.overall_progress_bar.set(0)
+        self.overall_progress_label.configure(text="0/0 tracks")
+        # Clear the downloads frame
+        for widget in self.downloads_frame.winfo_children():
+            if widget != self.downloads_frame_label:  # Don't destroy the label
+                widget.destroy()
+
+        # Reset download tracking
+        self.current_downloads.clear()
+        self.completed_downloads.clear()
+        self.failed_downloads.clear()
+
+    def add_download_progress(self, download_id, title, artist):
+        """Add a progress bar for a specific download."""
+        # Create a frame for this download
+        download_frame = ctk.CTkFrame(self.downloads_frame)
+
+        # Calculate the next row position (accounting for the label at row 0)
+        child_count = len(self.downloads_frame.winfo_children())
+        row_pos = child_count  # Since we already have the label at row 0
+
+        download_frame.grid(row=row_pos, column=0, sticky="ew", padx=5, pady=2)
+        download_frame.grid_columnconfigure(1, weight=1)
+
+        # Title label
+        title_label = ctk.CTkLabel(download_frame, text=f"{artist} - {title}", font=Styles.LABEL_FONT)
+        title_label.grid(row=0, column=0, sticky="w", padx=(5, 5), pady=2)
+
+        # Progress bar
+        progress_bar = ctk.CTkProgressBar(download_frame, width=100)
+        progress_bar.grid(row=0, column=1, sticky="ew", padx=(5, 5), pady=2)
+        progress_bar.set(0)
+
+        # Progress percentage label
+        progress_label = ctk.CTkLabel(download_frame, text="0%", font=Styles.LABEL_FONT)
+        progress_label.grid(row=0, column=2, sticky="e", padx=(5, 5), pady=2)
+
+        # Store the widgets for this download
+        self.current_downloads[download_id] = {
+            'frame': download_frame,
+            'progress_bar': progress_bar,
+            'progress_label': progress_label,
+            'title_label': title_label
+        }
+
+        return download_frame
+
+    def update_download_progress(self, download_id, progress):
+        """Update the progress bar for a specific download."""
+        if download_id in self.current_downloads:
+            download_info = self.current_downloads[download_id]
+            progress_bar = download_info['progress_bar']
+            progress_label = download_info['progress_label']
+
+            # Update the progress bar
+            progress_bar.set(progress)
+
+            # Update the percentage label
+            percent = int(progress * 100)
+            progress_label.configure(text=f"{percent}%")
+
+    def update_overall_progress(self, completed, total):
+        """Update the overall progress bar and label."""
+        if total > 0:
+            overall_progress = completed / total
+            self.overall_progress_bar.set(overall_progress)
+            self.overall_progress_label.configure(text=f"{completed}/{total} tracks")
+        else:
+            self.overall_progress_bar.set(0)
+            self.overall_progress_label.configure(text="0/0 tracks")
+
 
     def open_downloads(self):
         download_path = os.path.abspath(self.download_service.download_path)
