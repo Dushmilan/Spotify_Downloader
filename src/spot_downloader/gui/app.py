@@ -118,10 +118,6 @@ class App(ctk.CTk):
             self.log("Please enter a URL.")
             return
 
-        if not url:
-            self.log("Please enter a URL.")
-            return
-
         self.download_button.configure(state="disabled")
         self.log(f"Initiating download for: {url}")
         self.downloader.download(url, log_callback=self.log_finish_callback)
@@ -146,3 +142,4 @@ class App(ctk.CTk):
             self.downloader.set_download_path(new_path)
             self.path_display.configure(text=os.path.abspath(new_path))
             self.log(f"Destination changed to: {new_path}")
+            self.save_settings()
