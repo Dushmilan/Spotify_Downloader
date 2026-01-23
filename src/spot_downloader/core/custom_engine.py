@@ -110,7 +110,7 @@ class CustomDownloadEngine:
             'outtmpl': output_path,
             'postprocessors': [{
                 'key': 'FFmpegExtractAudio',
-                'preferredcodec': app_config.file_.format,
+                'preferredcodec': app_config.file_format, # Corrected attribute access
                 'preferredquality': preferred_quality,
             }],
             # Using '0' for audio-quality ensures the best VBR/CBR encoding
