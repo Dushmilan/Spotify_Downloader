@@ -12,16 +12,26 @@ class SpotDownloader:
         # Use config value if no path provided
         if download_path is None:
             download_path = app_config.download_path
-        # Validate and sanitize the download path
-        self.download_path = validate_download_path(os.getcwd(), download_path)
+
+        # If download_path is an absolute path, use it directly
+        if os.path.isabs(download_path):
+            self.download_path = download_path
+        else:
+            # Validate and sanitize the download path as a subdirectory
+            self.download_path = validate_download_path(os.getcwd(), download_path)
+
         self.client_id = None
         self.client_secret = None
         if not os.path.exists(self.download_path):
             os.makedirs(self.download_path)
 
     def set_download_path(self, new_path):
-        # Validate and sanitize the new download path
-        self.download_path = validate_download_path(os.getcwd(), new_path)
+        # If new_path is an absolute path, use it directly
+        if os.path.isabs(new_path):
+            self.download_path = new_path
+        else:
+            # Validate and sanitize the new download path as a subdirectory
+            self.download_path = validate_download_path(os.getcwd(), new_path)
         if not os.path.exists(self.download_path):
             os.makedirs(self.download_path)
 
@@ -48,7 +58,7 @@ class SpotDownloader:
         Spotify metadata fetching is replaced with hardcoded fake data for testing.
         """
         from .custom_engine import CustomDownloadEngine
-        # Removed: from spotify_scraper import SpotifyClient
+        from spotify_scraper import SpotifyClient
 
         # Validate the input URL
         if not url or not isinstance(url, str):
@@ -96,12 +106,29 @@ class SpotDownloader:
                     if log_callback:
                         log_callback("Validated as Spotify URL")
 
-                    # Replaced SpotifyClient logic with hardcoded fake data
+                    # Use SpotifyClient to fetch real data
                     if "playlist" in url:
                         if log_callback:
-                            log_callback("Fetching playlist details (using mock data)...")
+                            log_callback("Fetching playlist details from Spotify...")
 
-                        playlist_data = FAKE_PLAYLIST_DATA
+                        try:
+                            client = SpotifyClient()
+                            playlist_data = client.get_playlist_info(url)
+
+                            if not playlist_data:
+                                if log_callback:
+                                    log_callback("Failed to fetch playlist data from Spotify, using fallback...")
+                                playlist_data = FAKE_PLAYLIST_DATA  # Fallback to mock data
+                            else:
+                                if log_callback:
+                                    log_callback("Successfully fetched playlist data from Spotify")
+
+                        except Exception as e:
+                            handle_download_error(e, log_callback, "Fetching playlist from Spotify")
+                            if log_callback:
+                                log_callback("Using fallback mock data...")
+                            playlist_data = FAKE_PLAYLIST_DATA  # Fallback to mock data
+
                         playlist_name = playlist_data.get('name', 'Unknown Playlist')
 
                         # Sanitize playlist name to prevent directory traversal
@@ -114,7 +141,7 @@ class SpotDownloader:
                         if not os.path.exists(playlist_folder):
                             os.makedirs(playlist_folder)
 
-                        # Save mock playlist metadata to cache file
+                        # Save playlist metadata to cache file
                         cache_file = os.path.join(playlist_folder, "playlist.json")
                         cache_file_path = cache_file
                         try:
@@ -128,22 +155,29 @@ class SpotDownloader:
                                 json.dump(clean_for_json(playlist_data), f, indent=2)
                         except Exception as e:
                             if log_callback:
-                                log_callback(f"Failed to save mock playlist cache: {e}")
+                                log_callback(f"Failed to save playlist cache: {e}")
 
-                        tracks_container = playlist_data['tracks']
-                        tracks = tracks_container.get('items', []) if isinstance(tracks_container, dict) else tracks_container
+                        tracks_container = playlist_data.get('tracks', playlist_data.get('items', []))
+                        tracks = tracks_container if isinstance(tracks_container, list) else []
 
                         if log_callback:
-                            log_callback(f"Found {len(tracks)} tracks in '{playlist_name}' (mock data). Processing list...")
+                            log_callback(f"Found {len(tracks)} tracks in '{playlist_name}'. Processing list...")
 
                         skipped_count = 0
                         for item in tracks:
-                            track_data = item.get('track', item)
+                            # Handle different data structures that might come from the API
+                            track_data = item.get('track', item) if isinstance(item, dict) else item
                             if not track_data or not isinstance(track_data, dict):
                                 continue
 
                             song_name = track_data.get('name', 'Unknown Track')
-                            artist_name = track_data['artists'][0]['name'] if track_data.get('artists') else 'Unknown Artist'
+
+                            # Handle different artist data structures
+                            artists_data = track_data.get('artists', [])
+                            if artists_data and isinstance(artists_data, list) and len(artists_data) > 0:
+                                artist_name = artists_data[0].get('name', 'Unknown Artist') if isinstance(artists_data[0], dict) else str(artists_data[0])
+                            else:
+                                artist_name = 'Unknown Artist'
 
                             # Sanitize file name to prevent directory traversal
                             file_name = f"{artist_name} - {song_name}"
@@ -161,7 +195,7 @@ class SpotDownloader:
                                 'name': song_name,
                                 'artist': artist_name,
                                 'duration_ms': track_data.get('duration_ms'),
-                                'album': track_data['album']['name'] if track_data.get('album') else '',
+                                'album': track_data.get('album', {}).get('name', ''),
                                 'output_dir': playlist_folder
                             }
                             metadata_list.append(meta)
@@ -173,14 +207,107 @@ class SpotDownloader:
                             log_callback("All tracks already downloaded!")
 
                     elif "track" in url:
-                        # Use mock track info for single track URLs
-                        metadata_list.append(FAKE_TRACK_INFO)
+                        # Fetch single track info
+                        try:
+                            client = SpotifyClient()
+                            track_info = client.get_track_info(url)
+
+                            if track_info:
+                                # Format track info to match expected metadata structure
+                                song_name = track_info.get('name', 'Unknown Track')
+
+                                # Handle artist data
+                                artists_data = track_info.get('artists', [])
+                                if artists_data and isinstance(artists_data, list) and len(artists_data) > 0:
+                                    artist_name = artists_data[0].get('name', 'Unknown Artist') if isinstance(artists_data[0], dict) else str(artists_data[0])
+                                else:
+                                    artist_name = 'Unknown Artist'
+
+                                meta = {
+                                    'name': song_name,
+                                    'artist': artist_name,
+                                    'duration_ms': track_info.get('duration_ms'),
+                                    'album': track_info.get('album', {}).get('name', ''),
+                                }
+                                metadata_list.append(meta)
+                                if log_callback:
+                                    log_callback(f"Fetched track info: {artist_name} - {song_name}")
+                            else:
+                                if log_callback:
+                                    log_callback("Failed to fetch track info, using fallback...")
+                                metadata_list.append(FAKE_TRACK_INFO)
+
+                        except Exception as e:
+                            handle_download_error(e, log_callback, "Fetching track from Spotify")
+                            if log_callback:
+                                log_callback("Using fallback mock data...")
+                            metadata_list.append(FAKE_TRACK_INFO)
 
                     elif "album" in url:
-                        # For album URLs, use mock single track info as a fallback
-                        if log_callback:
-                            log_callback("Album scraping is currently not supported in this mode. Using mock track data as fallback.")
-                        metadata_list.append(FAKE_TRACK_INFO)
+                        # Fetch album info
+                        try:
+                            client = SpotifyClient()
+                            album_info = client.get_album_info(url)
+
+                            if album_info:
+                                album_name = album_info.get('name', 'Unknown Album')
+                                tracks_data = album_info.get('tracks', album_info.get('items', []))
+
+                                # Sanitize album name for folder
+                                safe_album_name = sanitize_filename(album_name)
+                                if not safe_album_name:
+                                    safe_album_name = "Unknown_Album"
+
+                                album_folder = os.path.join(self.download_path, safe_album_name)
+                                if not os.path.exists(album_folder):
+                                    os.makedirs(album_folder)
+
+                                if log_callback:
+                                    log_callback(f"Fetched album info: {album_name} with {len(tracks_data)} tracks")
+
+                                for track_item in tracks_data:
+                                    track_data = track_item.get('track', track_item) if isinstance(track_item, dict) else track_item
+                                    if not track_data or not isinstance(track_data, dict):
+                                        continue
+
+                                    song_name = track_data.get('name', 'Unknown Track')
+
+                                    # Handle artist data
+                                    artists_data = track_data.get('artists', [])
+                                    if artists_data and isinstance(artists_data, list) and len(artists_data) > 0:
+                                        artist_name = artists_data[0].get('name', 'Unknown Artist') if isinstance(artists_data[0], dict) else str(artists_data[0])
+                                    else:
+                                        artist_name = album_info.get('artists', [{}])[0].get('name', 'Unknown Artist') if album_info.get('artists', []) else 'Unknown Artist'
+
+                                    # Sanitize file name
+                                    file_name = f"{artist_name} - {song_name}"
+                                    file_name = sanitize_filename(file_name)
+                                    if not file_name:
+                                        file_name = "Unknown_Artist - Unknown_Song"
+
+                                    expected_path = os.path.join(album_folder, f"{file_name}.mp3")
+
+                                    if os.path.exists(expected_path):
+                                        continue
+
+                                    meta = {
+                                        'name': song_name,
+                                        'artist': artist_name,
+                                        'duration_ms': track_data.get('duration_ms'),
+                                        'album': album_name,
+                                        'output_dir': album_folder
+                                    }
+                                    metadata_list.append(meta)
+                            else:
+                                if log_callback:
+                                    log_callback("Album scraping is currently not supported. Using fallback...")
+                                metadata_list.append(FAKE_TRACK_INFO)
+
+                        except Exception as e:
+                            handle_download_error(e, log_callback, "Fetching album from Spotify")
+                            if log_callback:
+                                log_callback("Using fallback mock data...")
+                            metadata_list.append(FAKE_TRACK_INFO)
                     else:
                         # Fallback for unrecognized Spotify URLs
                         metadata_list.append({'name': url, 'artist': 'Unknown Artist'})

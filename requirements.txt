@@ -1,7 +1,7 @@
 
 customtkinter
 pillow
-spotify_scraper
+spotifyscraper
 pytest
 requests
 yt-dlp

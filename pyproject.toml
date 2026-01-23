@@ -21,7 +21,7 @@ dependencies = [
     "spotdl",
     "yt-dlp",
     "mutagen",
-    "spotify_scraper",
+    "spotifyscraper",
     "requests",
     "pillow",
     "urllib3",

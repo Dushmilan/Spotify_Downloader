@@ -1,0 +1,11 @@
+{
+  "download_path": "/home/dushmilan/Desktop/Emergence",
+  "max_concurrent_downloads": 5,
+  "download_quality": "320kbps",
+  "file_format": "mp3",
+  "enable_logging": true,
+  "log_level": "INFO",
+  "retry_attempts": 3,
+  "timeout_seconds": 30,
+  "safe_mode": true
+}
