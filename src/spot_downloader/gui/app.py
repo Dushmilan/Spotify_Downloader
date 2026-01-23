@@ -216,18 +216,18 @@ class App(ctk.CTk):
 
         # Update progress based on message content
         if "download complete" in message.lower() or "successfully downloaded" in message.lower():
-            self.progress_bar.set(1.0)
-            self.progress_label.configure(text="100%")
+            self.overall_progress_bar.set(1.0)
+            self.overall_progress_label.configure(text="100%")
         elif "downloading" in message.lower() or "processing" in message.lower():
             # Simple progress indication - in a real app, you'd have actual progress
-            current_val = self.progress_bar.get()
+            current_val = self.overall_progress_bar.get()
             if current_val < 0.8:  # Don't exceed 80% until final completion
                 new_val = min(current_val + 0.1, 0.8)
-                self.progress_bar.set(new_val)
-                self.progress_label.configure(text=f"{int(new_val * 100)}%")
+                self.overall_progress_bar.set(new_val)
+                self.overall_progress_label.configure(text=f"{int(new_val * 100)}%")
         elif "all downloads finished" in message.lower():
-            self.progress_bar.set(1.0)
-            self.progress_label.configure(text="100%")
+            self.overall_progress_bar.set(1.0)
+            self.overall_progress_label.configure(text="100%")
 
     def reset_ui_after_download(self):
         """Reset UI elements after download completion"""
