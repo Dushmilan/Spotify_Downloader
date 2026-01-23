@@ -5,6 +5,7 @@ import json
 import time
 from urllib3.util.retry import Retry
 from requests.adapters import HTTPAdapter
+from ..config import app_config
 
 class YouTubeSearcher:
     @staticmethod
@@ -22,7 +23,9 @@ class YouTubeSearcher:
         if not query:
             return None
 
-        print(f"Searching YTM for: {query}")
+        # Only print in debug mode
+        if app_config.log_level.upper() == "DEBUG":
+            print(f"Searching YTM for: {query}")
 
         # We use a specific search query to target YTM 'songs' category
         search_query = f"{query} official audio"
@@ -141,7 +144,8 @@ class YouTubeSearcher:
                     best_score = matches[0][0]
 
                     if best_score > 20:
-                        print(f"Warning: Best match score is high: {best_score}")
+                        if app_config.log_level.upper() == "DEBUG":
+                            print(f"Warning: Best match score is high: {best_score}")
 
                     return best_match['url']
 

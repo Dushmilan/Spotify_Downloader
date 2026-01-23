@@ -83,10 +83,16 @@ class App(ctk.CTk):
         self.log_textbox.configure(state="disabled")
 
         # Add a progress bar for better UX
+        # Progress bar for overall download progress
         self.progress_bar = ctk.CTkProgressBar(self)
         self.progress_bar.grid(row=5, column=0, padx=20, pady=(0, 10), sticky="ew")
         self.progress_bar.set(0)  # Initially set to 0
         self.progress_bar.grid_remove()  # Hide initially
+
+        # Add a label to show progress percentage
+        self.progress_label = ctk.CTkLabel(self, text="0%", font=Styles.LABEL_FONT)
+        self.progress_label.grid(row=6, column=0, padx=20, pady=(0, 10), sticky="ew")
+        self.progress_label.grid_remove()  # Hide initially
 
     def load_settings(self):
         try:
@@ -160,13 +166,19 @@ class App(ctk.CTk):
         self.log(message)
 
         # Update progress based on message content
-        if "download complete" in message.lower():
+        if "download complete" in message.lower() or "successfully downloaded" in message.lower():
             self.progress_bar.set(1.0)
-        elif "downloading" in message.lower():
+            self.progress_label.configure(text="100%")
+        elif "downloading" in message.lower() or "processing" in message.lower():
             # Simple progress indication - in a real app, you'd have actual progress
             current_val = self.progress_bar.get()
             if current_val < 0.8:  # Don't exceed 80% until final completion
-                self.progress_bar.set(current_val + 0.1)
+                new_val = min(current_val + 0.1, 0.8)
+                self.progress_bar.set(new_val)
+                self.progress_label.configure(text=f"{int(new_val * 100)}%")
+        elif "all downloads finished" in message.lower():
+            self.progress_bar.set(1.0)
+            self.progress_label.configure(text="100%")
 
     def reset_ui_after_download(self):
         """Reset UI elements after download completion"""
@@ -174,7 +186,9 @@ class App(ctk.CTk):
         self.url_entry.configure(state="normal")
         self.select_destination_button.configure(state="normal")
         self.progress_bar.grid_remove()
+        self.progress_label.grid_remove()
         self.progress_bar.set(0)
+        self.progress_label.configure(text="0%")
 
     def open_downloads(self):
         download_path = os.path.abspath(self.download_service.download_path)

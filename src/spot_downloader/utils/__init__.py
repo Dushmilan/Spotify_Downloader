@@ -6,3 +6,10 @@ from .validation import (
     validate_download_path,
     is_safe_url
 )
+from .error_handling import (
+    DownloadError,
+    DownloadErrorType,
+    setup_logging,
+    log_error,
+    handle_download_error
+)

@@ -4,6 +4,7 @@ import subprocess
 import concurrent.futures
 import json  # Import json for handling fake data
 from ..utils.validation import validate_spotify_url, sanitize_filename, validate_download_path, is_safe_url
+from ..utils.error_handling import handle_download_error, DownloadError, DownloadErrorType
 from ..config import app_config
 
 class SpotDownloader:
@@ -27,18 +28,18 @@ class SpotDownloader:
     def _download_track(self, meta, engine, progress_callback=None, log_callback=None):
         """Helper function to download a single track, suitable for ThreadPoolExecutor."""
         try:
-            print(f"DEBUG: Processing track: {meta.get('name')} in {meta.get('output_dir', 'default')}")
+            if log_callback:
+                log_callback(f"Processing track: {meta.get('name', 'Unknown Track')} in {meta.get('output_dir', 'default')}")
             success = engine.download_and_tag(meta, progress_callback, log_callback)
             if success:
                 if log_callback:
-                    log_callback(f"Download of '{meta.get('name')}' completed successfully!")
+                    log_callback(f"Download of '{meta.get('name', 'Unknown Track')}' completed successfully!")
             else:
                 if log_callback:
-                    log_callback(f"Failed to download: {meta.get('name')}")
+                    log_callback(f"Failed to download: {meta.get('name', 'Unknown Track')}")
             return success
         except Exception as e:
-            if log_callback:
-                log_callback(f"An error occurred while downloading {meta.get('name')}: {e}")
+            handle_download_error(e, log_callback, f"Downloading {meta.get('name', 'Unknown Track')}")
             return False
 
     def download(self, url, progress_callback=None, log_callback=None):
@@ -85,139 +86,142 @@ class SpotDownloader:
             if log_callback:
                 log_callback("Running Custom Download Engine...")
 
-            engine = CustomDownloadEngine(self.download_path)
+            try:
+                engine = CustomDownloadEngine(self.download_path)
 
-            metadata_list = []
+                metadata_list = []
 
-            # Validate if it's a Spotify URL
-            if validate_spotify_url(url):
-                if log_callback:
-                    log_callback("Validated as Spotify URL")
-
-                # Replaced SpotifyClient logic with hardcoded fake data
-                if "playlist" in url:
+                # Validate if it's a Spotify URL
+                if validate_spotify_url(url):
                     if log_callback:
-                        log_callback("Fetching playlist details (using mock data)...")
+                        log_callback("Validated as Spotify URL")
 
-                    playlist_data = FAKE_PLAYLIST_DATA
-                    playlist_name = playlist_data.get('name', 'Unknown Playlist')
+                    # Replaced SpotifyClient logic with hardcoded fake data
+                    if "playlist" in url:
+                        if log_callback:
+                            log_callback("Fetching playlist details (using mock data)...")
 
-                    # Sanitize playlist name to prevent directory traversal
-                    safe_playlist_name = sanitize_filename(playlist_name)
-                    if not safe_playlist_name:
-                        safe_playlist_name = "Unknown_Playlist"
+                        playlist_data = FAKE_PLAYLIST_DATA
+                        playlist_name = playlist_data.get('name', 'Unknown Playlist')
 
-                    playlist_folder = os.path.join(self.download_path, safe_playlist_name)
+                        # Sanitize playlist name to prevent directory traversal
+                        safe_playlist_name = sanitize_filename(playlist_name)
+                        if not safe_playlist_name:
+                            safe_playlist_name = "Unknown_Playlist"
 
-                    if not os.path.exists(playlist_folder):
-                        os.makedirs(playlist_folder)
+                        playlist_folder = os.path.join(self.download_path, safe_playlist_name)
 
-                    # Save mock playlist metadata to cache file
-                    cache_file = os.path.join(playlist_folder, "playlist.json")
-                    cache_file_path = cache_file
+                        if not os.path.exists(playlist_folder):
+                            os.makedirs(playlist_folder)
+
+                        # Save mock playlist metadata to cache file
+                        cache_file = os.path.join(playlist_folder, "playlist.json")
+                        cache_file_path = cache_file
+                        try:
+                            def clean_for_json(obj):
+                                if isinstance(obj, set): return list(obj)
+                                if isinstance(obj, dict): return {k: clean_for_json(v) for k, v in obj.items()}
+                                if isinstance(obj, list): return [clean_for_json(i) for i in obj]
+                                return obj
+
+                            with open(cache_file, "w", encoding="utf-8") as f:
+                                json.dump(clean_for_json(playlist_data), f, indent=2)
+                        except Exception as e:
+                            if log_callback:
+                                log_callback(f"Failed to save mock playlist cache: {e}")
+
+                        tracks_container = playlist_data['tracks']
+                        tracks = tracks_container.get('items', []) if isinstance(tracks_container, dict) else tracks_container
+
+                        if log_callback:
+                            log_callback(f"Found {len(tracks)} tracks in '{playlist_name}' (mock data). Processing list...")
+
+                        skipped_count = 0
+                        for item in tracks:
+                            track_data = item.get('track', item)
+                            if not track_data or not isinstance(track_data, dict):
+                                continue
+
+                            song_name = track_data.get('name', 'Unknown Track')
+                            artist_name = track_data['artists'][0]['name'] if track_data.get('artists') else 'Unknown Artist'
+
+                            # Sanitize file name to prevent directory traversal
+                            file_name = f"{artist_name} - {song_name}"
+                            file_name = sanitize_filename(file_name)
+                            if not file_name:
+                                file_name = "Unknown_Artist - Unknown_Song"
+
+                            expected_path = os.path.join(playlist_folder, f"{file_name}.mp3")
+
+                            if os.path.exists(expected_path):
+                                skipped_count += 1
+                                continue
+
+                            meta = {
+                                'name': song_name,
+                                'artist': artist_name,
+                                'duration_ms': track_data.get('duration_ms'),
+                                'album': track_data['album']['name'] if track_data.get('album') else '',
+                                'output_dir': playlist_folder
+                            }
+                            metadata_list.append(meta)
+
+                        if skipped_count > 0 and log_callback:
+                            log_callback(f"Skipped {skipped_count} existing tracks.")
+
+                        if not metadata_list and skipped_count == len(tracks) and log_callback:
+                            log_callback("All tracks already downloaded!")
+
+                    elif "track" in url:
+                        # Use mock track info for single track URLs
+                        metadata_list.append(FAKE_TRACK_INFO)
+
+                    elif "album" in url:
+                        # For album URLs, use mock single track info as a fallback
+                        if log_callback:
+                            log_callback("Album scraping is currently not supported in this mode. Using mock track data as fallback.")
+                        metadata_list.append(FAKE_TRACK_INFO)
+                    else:
+                        # Fallback for unrecognized Spotify URLs
+                        metadata_list.append({'name': url, 'artist': 'Unknown Artist'})
+                else:
+                    # For non-Spotify URLs, treat as direct search
+                    if log_callback:
+                        log_callback(f"Treating as direct search: {url}")
+                    metadata_list.append({'name': url, 'artist': ''})
+
+                # Use ThreadPoolExecutor for concurrent downloads
+                if len(metadata_list) > 1:
+                    if log_callback:
+                        log_callback(f"Starting concurrent download of {len(metadata_list)} tracks...")
+                    with concurrent.futures.ThreadPoolExecutor(max_workers=app_config.max_concurrent_downloads) as executor:
+                        # Submit all download tasks
+                        future_to_meta = {executor.submit(self._download_track, meta, engine, progress_callback, log_callback): meta for meta in metadata_list}
+
+                        for future in concurrent.futures.as_completed(future_to_meta):
+                            meta = future_to_meta[future]
+                            try:
+                                future.result()  # We can check for exceptions here if needed
+                            except Exception as exc:
+                                handle_download_error(exc, log_callback, f"Processing {meta.get('name', 'Unknown Track')}")
+                    if log_callback:
+                        log_callback("All downloads finished!")
+                else:
+                    # Fallback to single download for single tracks or errors
+                    for meta in metadata_list:
+                        self._download_track(meta, engine, progress_callback, log_callback)
+
+            except Exception as e:
+                handle_download_error(e, log_callback, "Main download process")
+            finally:
+                if cache_file_path and os.path.exists(cache_file_path):
                     try:
-                        def clean_for_json(obj):
-                            if isinstance(obj, set): return list(obj)
-                            if isinstance(obj, dict): return {k: clean_for_json(v) for k, v in obj.items()}
-                            if isinstance(obj, list): return [clean_for_json(i) for i in obj]
-                            return obj
-
-                        with open(cache_file, "w", encoding="utf-8") as f:
-                            json.dump(clean_for_json(playlist_data), f, indent=2)
+                        os.remove(cache_file_path)
+                        if log_callback:
+                            log_callback("Cleaned up playlist cache.")
                     except Exception as e:
                         if log_callback:
-                            log_callback(f"Failed to save mock playlist cache: {e}")
-
-                    tracks_container = playlist_data['tracks']
-                    tracks = tracks_container.get('items', []) if isinstance(tracks_container, dict) else tracks_container
-
-                    if log_callback:
-                        log_callback(f"Found {len(tracks)} tracks in '{playlist_name}' (mock data). Processing list...")
-
-                    skipped_count = 0
-                    for item in tracks:
-                        track_data = item.get('track', item)
-                        if not track_data or not isinstance(track_data, dict):
-                            continue
-
-                        song_name = track_data.get('name', 'Unknown Track')
-                        artist_name = track_data['artists'][0]['name'] if track_data.get('artists') else 'Unknown Artist'
-
-                        # Sanitize file name to prevent directory traversal
-                        file_name = f"{artist_name} - {song_name}"
-                        file_name = sanitize_filename(file_name)
-                        if not file_name:
-                            file_name = "Unknown_Artist - Unknown_Song"
-
-                        expected_path = os.path.join(playlist_folder, f"{file_name}.mp3")
-
-                        if os.path.exists(expected_path):
-                            skipped_count += 1
-                            continue
-
-                        meta = {
-                            'name': song_name,
-                            'artist': artist_name,
-                            'duration_ms': track_data.get('duration_ms'),
-                            'album': track_data['album']['name'] if track_data.get('album') else '',
-                            'output_dir': playlist_folder
-                        }
-                        metadata_list.append(meta)
-
-                    if skipped_count > 0 and log_callback:
-                        log_callback(f"Skipped {skipped_count} existing tracks.")
-
-                    if not metadata_list and skipped_count == len(tracks) and log_callback:
-                        log_callback("All tracks already downloaded!")
-
-                elif "track" in url:
-                    # Use mock track info for single track URLs
-                    metadata_list.append(FAKE_TRACK_INFO)
-
-                elif "album" in url:
-                    # For album URLs, use mock single track info as a fallback
-                    if log_callback:
-                        log_callback("Album scraping is currently not supported in this mode. Using mock track data as fallback.")
-                    metadata_list.append(FAKE_TRACK_INFO)
-                else:
-                    # Fallback for unrecognized Spotify URLs
-                    metadata_list.append({'name': url, 'artist': 'Unknown Artist'})
-            else:
-                # For non-Spotify URLs, treat as direct search
-                if log_callback:
-                    log_callback(f"Treating as direct search: {url}")
-                metadata_list.append({'name': url, 'artist': ''})
-
-            # Use ThreadPoolExecutor for concurrent downloads
-            if len(metadata_list) > 1:
-                if log_callback:
-                    log_callback(f"Starting concurrent download of {len(metadata_list)} tracks...")
-                with concurrent.futures.ThreadPoolExecutor(max_workers=app_config.max_concurrent_downloads) as executor:
-                    # Submit all download tasks
-                    future_to_meta = {executor.submit(self._download_track, meta, engine, progress_callback, log_callback): meta for meta in metadata_list}
-
-                    for future in concurrent.futures.as_completed(future_to_meta):
-                        meta = future_to_meta[future]
-                        try:
-                            future.result()  # We can check for exceptions here if needed
-                        except Exception as exc:
-                            if log_callback:
-                                log_callback(f"{meta.get('name', 'Unknown Track')} generated an exception: {exc}")
-                if log_callback:
-                    log_callback("All downloads finished!")
-            else:
-                # Fallback to single download for single tracks or errors
-                for meta in metadata_list:
-                    self._download_track(meta, engine, progress_callback, log_callback)
-
-            if cache_file_path and os.path.exists(cache_file_path):
-                try:
-                    os.remove(cache_file_path)
-                    if log_callback:
-                        log_callback("Cleaned up playlist cache.")
-                except Exception as e:
-                    if log_callback:
-                        log_callback(f"Error deleting cache: {e}")
+                            log_callback(f"Error deleting cache: {e}")
 
         thread = threading.Thread(target=run, daemon=True)
         thread.start()
