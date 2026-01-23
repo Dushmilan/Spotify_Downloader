@@ -76,8 +76,8 @@ class App(ctk.CTk):
 
     def _create_sidebar_button(self, text, row, command):
         btn = ctk.CTkButton(
-            self.sidebar_frame, 
-            text=text, 
+            self.sidebar_frame,
+            text=text,
             command=command,
             anchor="w",
             height=40,
@@ -92,9 +92,9 @@ class App(ctk.CTk):
     def _init_search_frame(self):
         frame = ctk.CTkFrame(self.main_container, fg_color="transparent")
         self.frames["Search"] = frame
-        
+
         frame.grid_columnconfigure(0, weight=1)
-        
+
         # Hero Section
         hero_label = ctk.CTkLabel(frame, text="Download tracks and playlists", font=Styles.HEADER_FONT)
         hero_label.grid(row=0, column=0, padx=40, pady=(100, 20), sticky="w")
@@ -106,7 +106,7 @@ class App(ctk.CTk):
         input_container.grid_propagate(False)
 
         self.url_entry = ctk.CTkEntry(
-            input_container, 
+            input_container,
             placeholder_text="What do you want to download?",
             fg_color="transparent",
             border_width=0,
@@ -116,8 +116,8 @@ class App(ctk.CTk):
         self.url_entry.grid(row=0, column=0, padx=(20, 10), pady=10, sticky="ew")
 
         self.download_button = ctk.CTkButton(
-            frame, 
-            text="START DOWNLOAD", 
+            frame,
+            text="START DOWNLOAD",
             command=self.start_download,
             fg_color=Styles.ACCENT_GREEN,
             hover_color=Styles.ACCENT_GREEN_HOVER,
@@ -153,7 +153,7 @@ class App(ctk.CTk):
         self.overall_progress_bar = ctk.CTkProgressBar(progress_container, fg_color=Styles.BG_DARK, progress_color=Styles.ACCENT_GREEN)
         self.overall_progress_bar.grid(row=0, column=0, padx=15, pady=(15, 5), sticky="ew")
         self.overall_progress_bar.set(0)
-        
+
         self.overall_progress_label = ctk.CTkLabel(progress_container, text="0/0 tracks", font=Styles.SMALL_LABEL_FONT, text_color=Styles.TEXT_SECONDARY)
         self.overall_progress_label.grid(row=1, column=0, padx=15, pady=(0, 15), sticky="w")
 
@@ -184,7 +184,7 @@ class App(ctk.CTk):
         btn_frame.grid(row=0, column=1, rowspan=2, padx=15, pady=15)
 
         self.select_destination_button = ctk.CTkButton(
-            btn_frame, text="Change", command=self.select_folder, width=80, 
+            btn_frame, text="Change", command=self.select_folder, width=80,
             fg_color=Styles.BG_CARD_HOVER, border_width=1, border_color=Styles.BORDER_COLOR
         )
         self.select_destination_button.grid(row=0, column=0, padx=5)
@@ -217,9 +217,9 @@ class App(ctk.CTk):
                 frame.grid(row=0, column=0, sticky="nsew")
             else:
                 frame.grid_forget()
-        
+
         # Update button styles
-        for btn, text in [(self.search_btn, "Search"), (self.downloads_btn, "Downloads"), 
+        for btn, text in [(self.search_btn, "Search"), (self.downloads_btn, "Downloads"),
                           (self.settings_btn, "Settings"), (self.history_btn, "History")]:
             if text == name:
                 btn.configure(fg_color=Styles.BG_CARD_HOVER, text_color=Styles.ACCENT_GREEN)
@@ -281,7 +281,7 @@ class App(ctk.CTk):
         # Disable UI elements during download
         self.download_button.configure(state="disabled", text="DOWNLOADING...")
         self.url_entry.configure(state="disabled")
-        
+
         # Switch to downloads view
         self.show_downloads()
 
@@ -306,7 +306,7 @@ class App(ctk.CTk):
         """Update the UI based on the tracker data."""
         tracker = self.download_service.tracker
         all_downloads = tracker.get_all_downloads()
-        
+
         # 1. Add new items incrementally to avoid UI hang
         new_items_count = 0
         for download in all_downloads:
@@ -347,11 +347,11 @@ class App(ctk.CTk):
         self.download_button.configure(state="normal", text="START DOWNLOAD")
         self.url_entry.configure(state="normal")
         self.url_entry.delete(0, 'end')
-        
+
         # Reset progress components
         self.overall_progress_bar.set(0)
         self.overall_progress_label.configure(text="0/0 tracks")
-        
+
         # We don't necessarily clear the cards immediately so user can see completion
         # but for a "reset" we might want to if they start a new one.
 
@@ -369,7 +369,7 @@ class App(ctk.CTk):
         # Labels
         title_label = ctk.CTkLabel(content, text=title, font=Styles.BODY_BOLD, anchor="w")
         title_label.grid(row=0, column=0, sticky="w")
-        
+
         artist_label = ctk.CTkLabel(content, text=artist, font=Styles.SMALL_LABEL_FONT, text_color=Styles.TEXT_SECONDARY, anchor="w")
         artist_label.grid(row=1, column=0, sticky="w")
 
@@ -418,7 +418,7 @@ class App(ctk.CTk):
         if download_id in self.current_downloads:
             info = self.current_downloads[download_id]
             info['pbar'].set(progress)
-            
+
             # Status display logic
             if status == DownloadStatus.COMPLETED or progress >= 1.0:
                 info['status'].configure(text="DONE", text_color=Styles.ACCENT_GREEN)
@@ -433,16 +433,64 @@ class App(ctk.CTk):
 
     def update_overall_progress(self, completed, total):
         """Update the main progress bar and counter."""
-        if total > 0:
-            progress = completed / total
+        # Check if we're downloading a playlist and get the total from playlist.json if available
+        playlist_total, playlist_name = self.get_playlist_info()
+
+        if playlist_total is not None:
+            # Use the total from playlist.json if available
+            progress_total = playlist_total
+            # Use the playlist name if available, otherwise use generic text
+            playlist_display = f"on {playlist_name}" if playlist_name else "on playlist.json"
+        else:
+            # Fall back to the calculated total
+            progress_total = total
+            playlist_display = "tracks"
+
+        if progress_total > 0:
+            progress = completed / progress_total if progress_total > 0 else 0
             self.overall_progress_bar.set(progress)
             self.overall_progress_label.configure(
-                text=f"Downloaded {completed} of {total} tracks",
-                text_color=Styles.ACCENT_GREEN if completed == total else Styles.TEXT_SECONDARY
+                text=f"{completed} of {progress_total} songs {playlist_display}",
+                text_color=Styles.ACCENT_GREEN if completed >= progress_total else Styles.TEXT_SECONDARY
             )
         else:
             self.overall_progress_bar.set(0)
             self.overall_progress_label.configure(text="0/0 tracks", text_color=Styles.TEXT_SECONDARY)
+
+    def get_playlist_info(self):
+        """Get the total number of songs and playlist name from playlist.json if available."""
+        try:
+            # Look for playlist.json in the download directory
+            download_path = self.download_service.download_path
+
+            # Find directories that might contain playlist.json
+            for item in os.listdir(download_path):
+                item_path = os.path.join(download_path, item)
+                if os.path.isdir(item_path):
+                    playlist_json_path = os.path.join(item_path, "playlist.json")
+                    if os.path.exists(playlist_json_path):
+                        with open(playlist_json_path, 'r', encoding='utf-8') as f:
+                            playlist_data = json.load(f)
+
+                        # Extract the tracks count from the playlist data
+                        tracks_container = playlist_data.get('tracks', playlist_data.get('items', []))
+                        if isinstance(tracks_container, dict):
+                            # If tracks is a dict with an 'items' key (like Spotify API response)
+                            tracks = tracks_container.get('items', [])
+                        else:
+                            # If tracks is directly a list
+                            tracks = tracks_container
+
+                        # Get the playlist name
+                        playlist_name = playlist_data.get('name', 'playlist.json')
+
+                        return len(tracks), playlist_name
+        except Exception as e:
+            # If there's an error reading the playlist.json, return None
+            print(f"Error reading playlist.json: {e}")
+            return None, None
+
+        return None, None
 
     def open_downloads(self):
         path = os.path.abspath(self.download_service.download_path)
