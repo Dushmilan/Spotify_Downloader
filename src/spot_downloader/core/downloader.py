@@ -6,6 +6,7 @@ import json  # Import json for handling fake data
 from ..utils.validation import validate_spotify_url, sanitize_filename, validate_download_path, is_safe_url
 from ..utils.error_handling import handle_download_error, DownloadError, DownloadErrorType
 from ..config import app_config
+from ..tracker import DownloadStatus
 
 class SpotDownloader:
     def __init__(self, download_path=None):
@@ -48,7 +49,7 @@ class SpotDownloader:
             # Add to tracker
             if tracker:
                 tracker.add_download(download_id, track_name, track_artist)
-                tracker.update_status(download_id, 'downloading')
+                tracker.update_status(download_id, DownloadStatus.DOWNLOADING)
 
                 # Register callbacks to update the tracker
                 def progress_update(progress):
@@ -76,7 +77,7 @@ class SpotDownloader:
                 if log_callback:
                     log_callback(f"Download of '{track_name}' completed successfully!")
                 if tracker:
-                    tracker.update_status(download_id, 'completed')
+                    tracker.update_status(download_id, DownloadStatus.COMPLETED)
             else:
                 if log_callback:
                     log_callback(f"Failed to download: {track_name}")
@@ -94,9 +95,6 @@ class SpotDownloader:
         Downloads a song or playlist concurrently using the Custom Engine.
         Spotify metadata fetching is replaced with hardcoded fake data for testing.
         """
-        from .custom_engine import CustomDownloadEngine
-        from spotify_scraper import SpotifyClient
-
         # Validate the input URL
         if not url or not isinstance(url, str):
             if log_callback:
@@ -126,6 +124,10 @@ class SpotDownloader:
         FAKE_TRACK_INFO = {'name': 'Mock Single Song', 'artist': 'Mock Artist D', 'album': 'Mock Album W'}
 
         def run():
+            # Move heavy imports here to avoid stalling the UI thread
+            from .custom_engine import CustomDownloadEngine
+            from spotify_scraper import SpotifyClient
+
             cache_file_path = None
             if log_callback:
                 log_callback(f"Initiating download for: {url}")

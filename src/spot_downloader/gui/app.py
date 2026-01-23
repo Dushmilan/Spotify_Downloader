@@ -40,75 +40,196 @@ class App(ctk.CTk):
             ))
 
     def setup_ui(self):
-        self.grid_columnconfigure(0, weight=1)
-        self.grid_rowconfigure(5, weight=1)
+        # Configure grid for sidebar and main content
+        self.grid_columnconfigure(1, weight=1)
+        self.grid_rowconfigure(0, weight=1)
 
-        # Header
-        self.header_label = ctk.CTkLabel(self, text="Spotify Downloader", font=Styles.HEADER_FONT)
-        self.header_label.grid(row=0, column=0, padx=20, pady=(20, 10))
+        # 1. Sidebar Frame
+        self.sidebar_frame = ctk.CTkFrame(self, width=200, corner_radius=0, fg_color=Styles.BG_SIDEBAR)
+        self.sidebar_frame.grid(row=0, column=0, sticky="nsew")
+        self.sidebar_frame.grid_rowconfigure(5, weight=1) # Spacer
 
-        # Input Frame (URL)
-        self.input_frame = ctk.CTkFrame(self)
-        self.input_frame.grid(row=1, column=0, padx=20, pady=10, sticky="ew")
-        self.input_frame.grid_columnconfigure(0, weight=1)
+        self.logo_label = ctk.CTkLabel(self.sidebar_frame, text="SPOT-DL", font=Styles.HEADER_FONT, text_color=Styles.ACCENT_GREEN)
+        self.logo_label.grid(row=0, column=0, padx=20, pady=(30, 40))
 
-        self.url_entry = ctk.CTkEntry(self.input_frame, placeholder_text="Paste Spotify Song or Playlist URL here...")
-        self.url_entry.grid(row=0, column=0, padx=(10, 5), pady=10, sticky="ew")
+        # Sidebar Buttons
+        self.search_btn = self._create_sidebar_button("Search", 1, self.show_search)
+        self.downloads_btn = self._create_sidebar_button("Downloads", 2, self.show_downloads)
+        self.settings_btn = self._create_sidebar_button("Settings", 3, self.show_settings)
+        self.history_btn = self._create_sidebar_button("History", 4, self.show_history)
 
-        self.download_button = ctk.CTkButton(self.input_frame, text="Download", command=self.start_download)
-        self.download_button.grid(row=0, column=1, padx=(5, 5), pady=10)
+        # 2. Main Content Area
+        self.main_container = ctk.CTkFrame(self, corner_radius=0, fg_color=Styles.BG_DARK)
+        self.main_container.grid(row=0, column=1, sticky="nsew")
+        self.main_container.grid_columnconfigure(0, weight=1)
+        self.main_container.grid_rowconfigure(0, weight=1)
+
+        # 3. Initialize Frames
+        self.frames = {}
+        self._init_search_frame()
+        self._init_downloads_frame()
+        self._init_settings_frame()
+        self._init_history_frame()
+
+        # Show Search by default
+        self.show_search()
+
+    def _create_sidebar_button(self, text, row, command):
+        btn = ctk.CTkButton(
+            self.sidebar_frame, 
+            text=text, 
+            command=command,
+            anchor="w",
+            height=40,
+            fg_color="transparent",
+            text_color=Styles.TEXT_SECONDARY,
+            hover_color=Styles.BG_CARD_HOVER,
+            font=Styles.BODY_BOLD
+        )
+        btn.grid(row=row, column=0, padx=10, pady=5, sticky="ew")
+        return btn
+
+    def _init_search_frame(self):
+        frame = ctk.CTkFrame(self.main_container, fg_color="transparent")
+        self.frames["Search"] = frame
+        
+        frame.grid_columnconfigure(0, weight=1)
+        
+        # Hero Section
+        hero_label = ctk.CTkLabel(frame, text="Download tracks and playlists", font=Styles.HEADER_FONT)
+        hero_label.grid(row=0, column=0, padx=40, pady=(100, 20), sticky="w")
+
+        # Input Area (Mocking Spotify Search)
+        input_container = ctk.CTkFrame(frame, fg_color=Styles.BG_CARD, height=60, corner_radius=30)
+        input_container.grid(row=1, column=0, padx=40, pady=10, sticky="ew")
+        input_container.grid_columnconfigure(0, weight=1)
+        input_container.grid_propagate(False)
+
+        self.url_entry = ctk.CTkEntry(
+            input_container, 
+            placeholder_text="What do you want to download?",
+            fg_color="transparent",
+            border_width=0,
+            font=Styles.BODY_MAIN,
+            height=40
+        )
+        self.url_entry.grid(row=0, column=0, padx=(20, 10), pady=10, sticky="ew")
+
+        self.download_button = ctk.CTkButton(
+            frame, 
+            text="START DOWNLOAD", 
+            command=self.start_download,
+            fg_color=Styles.ACCENT_GREEN,
+            hover_color=Styles.ACCENT_GREEN_HOVER,
+            text_color=Styles.BG_DARK,
+            font=Styles.BODY_BOLD,
+            height=50,
+            corner_radius=25
+        )
+        self.download_button.grid(row=2, column=0, padx=40, pady=20, sticky="w")
+
+    def _init_downloads_frame(self):
+        frame = ctk.CTkFrame(self.main_container, fg_color="transparent")
+        self.frames["Downloads"] = frame
+        frame.grid_columnconfigure(0, weight=1)
+        frame.grid_rowconfigure(2, weight=1)
+
+        header = ctk.CTkFrame(frame, fg_color="transparent")
+        header.grid(row=0, column=0, padx=20, pady=(20, 10), sticky="ew")
+        header.grid_columnconfigure(0, weight=1)
+
+        title = ctk.CTkLabel(header, text="Active Downloads", font=Styles.SUBHEADER_FONT)
+        title.grid(row=0, column=0, sticky="w")
+
+        # Current Status Label in Downloads
+        self.downloads_status = ctk.CTkLabel(header, text="Ready to download", font=Styles.SMALL_LABEL_FONT, text_color=Styles.ACCENT_GREEN)
+        self.downloads_status.grid(row=0, column=1, sticky="e")
+
+        # Overall progress
+        progress_container = ctk.CTkFrame(frame, fg_color=Styles.BG_CARD, corner_radius=10)
+        progress_container.grid(row=1, column=0, padx=20, pady=10, sticky="ew")
+        progress_container.grid_columnconfigure(0, weight=1)
+
+        self.overall_progress_bar = ctk.CTkProgressBar(progress_container, fg_color=Styles.BG_DARK, progress_color=Styles.ACCENT_GREEN)
+        self.overall_progress_bar.grid(row=0, column=0, padx=15, pady=(15, 5), sticky="ew")
+        self.overall_progress_bar.set(0)
+        
+        self.overall_progress_label = ctk.CTkLabel(progress_container, text="0/0 tracks", font=Styles.SMALL_LABEL_FONT, text_color=Styles.TEXT_SECONDARY)
+        self.overall_progress_label.grid(row=1, column=0, padx=15, pady=(0, 15), sticky="w")
+
+        self.downloads_scroll = ctk.CTkScrollableFrame(frame, fg_color="transparent")
+        self.downloads_scroll.grid(row=2, column=0, padx=10, pady=10, sticky="nsew")
+        self.downloads_scroll.grid_columnconfigure(0, weight=1)
+
+    def _init_settings_frame(self):
+        frame = ctk.CTkFrame(self.main_container, fg_color="transparent")
+        self.frames["Settings"] = frame
+        frame.grid_columnconfigure(0, weight=1)
+
+        title = ctk.CTkLabel(frame, text="Settings", font=Styles.SUBHEADER_FONT)
+        title.grid(row=0, column=0, padx=20, pady=(20, 20), sticky="w")
+
+        # Path setting card
+        path_card = ctk.CTkFrame(frame, fg_color=Styles.BG_CARD, corner_radius=10)
+        path_card.grid(row=1, column=0, padx=20, pady=10, sticky="ew")
+        path_card.grid_columnconfigure(0, weight=1)
+
+        path_title = ctk.CTkLabel(path_card, text="Download Location", font=Styles.BODY_BOLD)
+        path_title.grid(row=0, column=0, padx=15, pady=(15, 5), sticky="w")
+
+        self.path_display = ctk.CTkLabel(path_card, text="downloads", font=Styles.LABEL_FONT, text_color=Styles.TEXT_SECONDARY)
+        self.path_display.grid(row=1, column=0, padx=15, pady=(0, 15), sticky="w")
+
+        btn_frame = ctk.CTkFrame(path_card, fg_color="transparent")
+        btn_frame.grid(row=0, column=1, rowspan=2, padx=15, pady=15)
 
         self.select_destination_button = ctk.CTkButton(
-            self.input_frame,
-            text="Select Destination",
-            command=self.select_folder,
-            fg_color=Styles.TRANSPARENT,
-            border_width=2
+            btn_frame, text="Change", command=self.select_folder, width=80, 
+            fg_color=Styles.BG_CARD_HOVER, border_width=1, border_color=Styles.BORDER_COLOR
         )
-        self.select_destination_button.grid(row=0, column=2, padx=(5, 10), pady=10)
+        self.select_destination_button.grid(row=0, column=0, padx=5)
 
-        # Path Selection Frame
-        self.path_frame = ctk.CTkFrame(self)
-        self.path_frame.grid(row=2, column=0, padx=20, pady=(0, 10), sticky="ew")
-        self.path_frame.grid_columnconfigure(1, weight=1)
+        self.open_current_button = ctk.CTkButton(
+            btn_frame, text="Open Folder", command=self.open_downloads, width=80,
+            fg_color=Styles.ACCENT_GREEN, text_color=Styles.BG_DARK
+        )
+        self.open_current_button.grid(row=0, column=1, padx=5)
 
-        self.path_label_title = ctk.CTkLabel(self.path_frame, text="Current Path:", font=Styles.SUBHEADER_FONT)
-        self.path_label_title.grid(row=0, column=0, padx=(10, 5), pady=10)
+    def _init_history_frame(self):
+        frame = ctk.CTkFrame(self.main_container, fg_color="transparent")
+        self.frames["History"] = frame
+        frame.grid_columnconfigure(0, weight=1)
+        frame.grid_rowconfigure(1, weight=1)
 
-        self.path_display = ctk.CTkLabel(self.path_frame, text="downloads", font=Styles.LABEL_FONT, anchor="w")
-        self.path_display.grid(row=0, column=1, padx=5, pady=10, sticky="ew")
+        title = ctk.CTkLabel(frame, text="Download Logs", font=Styles.SUBHEADER_FONT)
+        title.grid(row=0, column=0, padx=20, pady=(20, 10), sticky="w")
 
-        self.open_current_button = ctk.CTkButton(self.path_frame, text="Open Folder", command=self.open_downloads, width=100)
-        self.open_current_button.grid(row=0, column=2, padx=(5, 10), pady=10)
-
-        # Status Label
-        self.status_label = ctk.CTkLabel(self, text="Ready", font=Styles.LABEL_FONT)
-        self.status_label.grid(row=3, column=0, padx=20, pady=5)
-
-        # Log Text Area
-        self.log_textbox = ctk.CTkTextbox(self, height=200)
-        self.log_textbox.grid(row=4, column=0, padx=20, pady=(5, 20), sticky="nsew")
+        self.log_textbox = ctk.CTkTextbox(frame, fg_color=Styles.BG_DARK, border_color=Styles.BORDER_COLOR, border_width=1)
+        self.log_textbox.grid(row=1, column=0, padx=20, pady=(0, 20), sticky="nsew")
         self.log_textbox.configure(state="disabled")
 
-        # Overall progress bar for all downloads
-        self.overall_progress_bar = ctk.CTkProgressBar(self)
-        self.overall_progress_bar.grid(row=5, column=0, padx=20, pady=(0, 5), sticky="ew")
-        self.overall_progress_bar.set(0)  # Initially set to 0
-        self.overall_progress_bar.grid_remove()  # Hide initially
+        self.status_label = ctk.CTkLabel(frame, text="Ready", font=Styles.SMALL_LABEL_FONT, text_color=Styles.TEXT_SECONDARY)
+        self.status_label.grid(row=2, column=0, padx=20, pady=(0, 10), sticky="w")
 
-        # Label to show overall progress percentage
-        self.overall_progress_label = ctk.CTkLabel(self, text="0/0 tracks", font=Styles.LABEL_FONT)
-        self.overall_progress_label.grid(row=6, column=0, padx=20, pady=(0, 10), sticky="ew")
-        self.overall_progress_label.grid_remove()  # Hide initially
+    def show_frame(self, name):
+        for f_name, frame in self.frames.items():
+            if f_name == name:
+                frame.grid(row=0, column=0, sticky="nsew")
+            else:
+                frame.grid_forget()
+        
+        # Update button styles
+        for btn, text in [(self.search_btn, "Search"), (self.downloads_btn, "Downloads"), 
+                          (self.settings_btn, "Settings"), (self.history_btn, "History")]:
+            if text == name:
+                btn.configure(fg_color=Styles.BG_CARD_HOVER, text_color=Styles.ACCENT_GREEN)
+            else:
+                btn.configure(fg_color="transparent", text_color=Styles.TEXT_SECONDARY)
 
-        # Frame for individual download progress
-        self.downloads_frame = ctk.CTkScrollableFrame(self, height=150)
-        self.downloads_frame.grid(row=7, column=0, padx=20, pady=(0, 10), sticky="ew")
-        self.downloads_frame.grid_remove()  # Hide initially
-
-        # Label for the downloads frame
-        self.downloads_frame_label = ctk.CTkLabel(self.downloads_frame, text="Active Downloads:", font=Styles.LABEL_FONT)
-        self.downloads_frame_label.grid(row=0, column=0, sticky="w", padx=5, pady=5)
+    def show_search(self): self.show_frame("Search")
+    def show_downloads(self): self.show_frame("Downloads")
+    def show_settings(self): self.show_frame("Settings")
+    def show_history(self): self.show_frame("History")
 
     def load_settings(self):
         try:
@@ -158,16 +279,11 @@ class App(ctk.CTk):
             return
 
         # Disable UI elements during download
-        self.download_button.configure(state="disabled")
+        self.download_button.configure(state="disabled", text="DOWNLOADING...")
         self.url_entry.configure(state="disabled")
-        self.select_destination_button.configure(state="disabled")
-
-        # Show progress bars
-        self.overall_progress_bar.grid()
-        self.overall_progress_label.grid()
-        self.downloads_frame.grid()
-        self.overall_progress_bar.set(0)
-        self.overall_progress_label.configure(text="0/0 tracks")
+        
+        # Switch to downloads view
+        self.show_downloads()
 
         self.log(f"Initiating download for: {url}")
 
@@ -175,158 +291,140 @@ class App(ctk.CTk):
         self.download_thread = self.download_service.download(url, log_callback=self.log_finish_callback)
 
     def on_tracker_change(self):
-        """Called when the tracker changes."""
-        # Use after to schedule the UI update in the main thread
-        # Only schedule if not already scheduled to prevent flooding
+        """Called when the tracker changes from a background thread."""
+        # Use after to schedule the UI update in the main thread with debouncing
         if not hasattr(self, '_tracker_update_scheduled') or not self._tracker_update_scheduled:
             self._tracker_update_scheduled = True
-            self.after(10, self._update_ui_from_tracker_delayed)  # Small delay to debounce updates
+            self.after(100, self._update_ui_from_tracker_delayed)
 
     def _update_ui_from_tracker_delayed(self):
-        """Delayed UI update to prevent flooding."""
+        """Delayed UI update to prevent flooding the main thread."""
         self._tracker_update_scheduled = False
         self.update_ui_from_tracker()
 
     def update_ui_from_tracker(self):
-        """Update the UI based on the tracker."""
-        # Get the tracker from the download service
+        """Update the UI based on the tracker data."""
         tracker = self.download_service.tracker
-
-        # Get all downloads
         all_downloads = tracker.get_all_downloads()
-
-        # Add new downloads to the UI
+        
+        # 1. Add new items incrementally to avoid UI hang
+        new_items_count = 0
         for download in all_downloads:
             if download.id not in self.current_downloads:
-                # Add this download to the UI
                 self.add_download_progress(download.id, download.title, download.artist)
+                new_items_count += 1
+                # Limit to 5 new cards per update cycle (100ms) to keep UI responsive
+                if new_items_count >= 5:
+                    self._tracker_update_scheduled = True
+                    self.after(20, self._update_ui_from_tracker_delayed)
+                    break
 
-        # Update progress for all current downloads
+        # 2. Update progress bars for existing items
         for download in all_downloads:
             if download.id in self.current_downloads:
-                self.update_download_progress(download.id, download.progress)
+                self.update_download_progress(download.id, download.progress, download.status)
 
-        # Update overall progress
+        # 3. Update overall summary
         summary = tracker.get_summary()
         total = len(all_downloads)
-        completed = summary.get('completed', 0)
+        # Summary keys are strings like 'completed', 'failed', etc.
+        completed = summary.get(DownloadStatus.COMPLETED.value, 0)
         self.update_overall_progress(completed, total)
 
     def log_finish_callback(self, message):
-        # Ensure UI updates happen on the main thread
         self.after(0, lambda: self.update_ui_with_message(message))
-
-        if any(kw in message.lower() for kw in ["completed", "error", "finished", "all downloads finished"]):
-            # Ensure UI reset happens on the main thread
-            self.after(0, self.reset_ui_after_download)
+        if any(kw in message.lower() for kw in ["all downloads finished"]):
+            self.after(2000, self.reset_ui_after_download)
 
     def update_ui_with_message(self, message):
         """Update UI elements based on log messages"""
         self.log(message)
-
-        # Update progress based on message content
-        if "download complete" in message.lower() or "successfully downloaded" in message.lower():
-            self.overall_progress_bar.set(1.0)
-            self.overall_progress_label.configure(text="100%")
-        elif "downloading" in message.lower() or "processing" in message.lower():
-            # Simple progress indication - in a real app, you'd have actual progress
-            current_val = self.overall_progress_bar.get()
-            if current_val < 0.8:  # Don't exceed 80% until final completion
-                new_val = min(current_val + 0.1, 0.8)
-                self.overall_progress_bar.set(new_val)
-                self.overall_progress_label.configure(text=f"{int(new_val * 100)}%")
-        elif "all downloads finished" in message.lower():
-            self.overall_progress_bar.set(1.0)
-            self.overall_progress_label.configure(text="100%")
+        if hasattr(self, 'downloads_status'):
+            self.downloads_status.configure(text=message[:40] + "..." if len(message) > 40 else message)
 
     def reset_ui_after_download(self):
         """Reset UI elements after download completion"""
-        self.download_button.configure(state="normal")
+        self.download_button.configure(state="normal", text="START DOWNLOAD")
         self.url_entry.configure(state="normal")
-        self.select_destination_button.configure(state="normal")
-        self.overall_progress_bar.grid_remove()
-        self.overall_progress_label.grid_remove()
-        self.downloads_frame.grid_remove()
+        self.url_entry.delete(0, 'end')
+        
+        # Reset progress components
         self.overall_progress_bar.set(0)
         self.overall_progress_label.configure(text="0/0 tracks")
-        # Clear the downloads frame
-        for widget in self.downloads_frame.winfo_children():
-            if widget != self.downloads_frame_label:  # Don't destroy the label
-                widget.destroy()
-
-        # Reset download tracking
-        self.current_downloads.clear()
-        self.completed_downloads.clear()
-        self.failed_downloads.clear()
+        
+        # We don't necessarily clear the cards immediately so user can see completion
+        # but for a "reset" we might want to if they start a new one.
 
     def add_download_progress(self, download_id, title, artist):
-        """Add a progress bar for a specific download."""
-        # Create a frame for this download
-        download_frame = ctk.CTkFrame(self.downloads_frame)
+        """Add a premium card for a specific download."""
+        card = ctk.CTkFrame(self.downloads_scroll, fg_color=Styles.BG_CARD, corner_radius=10)
+        card.grid(row=len(self.current_downloads), column=0, sticky="ew", padx=10, pady=5)
+        card.grid_columnconfigure(0, weight=1)
 
-        # Calculate the next row position (accounting for the label at row 0)
-        child_count = len(self.downloads_frame.winfo_children())
-        row_pos = child_count  # Since we already have the label at row 0
+        # Content Frame
+        content = ctk.CTkFrame(card, fg_color="transparent")
+        content.grid(row=0, column=0, sticky="ew", padx=15, pady=10)
+        content.grid_columnconfigure(0, weight=1)
 
-        download_frame.grid(row=row_pos, column=0, sticky="ew", padx=5, pady=2)
-        download_frame.grid_columnconfigure(1, weight=1)
-
-        # Title label
-        title_label = ctk.CTkLabel(download_frame, text=f"{artist} - {title}", font=Styles.LABEL_FONT)
-        title_label.grid(row=0, column=0, sticky="w", padx=(5, 5), pady=2)
+        # Labels
+        title_label = ctk.CTkLabel(content, text=title, font=Styles.BODY_BOLD, anchor="w")
+        title_label.grid(row=0, column=0, sticky="w")
+        
+        artist_label = ctk.CTkLabel(content, text=artist, font=Styles.SMALL_LABEL_FONT, text_color=Styles.TEXT_SECONDARY, anchor="w")
+        artist_label.grid(row=1, column=0, sticky="w")
 
         # Progress bar
-        progress_bar = ctk.CTkProgressBar(download_frame, width=100)
-        progress_bar.grid(row=0, column=1, sticky="ew", padx=(5, 5), pady=2)
-        progress_bar.set(0)
+        pbar = ctk.CTkProgressBar(card, height=4, fg_color=Styles.BG_DARK, progress_color=Styles.ACCENT_GREEN)
+        pbar.grid(row=1, column=0, sticky="ew", padx=15, pady=(0, 10))
+        pbar.set(0)
 
-        # Progress percentage label
-        progress_label = ctk.CTkLabel(download_frame, text="0%", font=Styles.LABEL_FONT)
-        progress_label.grid(row=0, column=2, sticky="e", padx=(5, 5), pady=2)
+        # Status label (right side)
+        status_label = ctk.CTkLabel(content, text="Waiting...", font=Styles.SMALL_LABEL_FONT, text_color=Styles.TEXT_DIM)
+        status_label.grid(row=0, column=1, rowspan=2, padx=(10, 0))
 
-        # Store the widgets for this download
         self.current_downloads[download_id] = {
-            'frame': download_frame,
-            'progress_bar': progress_bar,
-            'progress_label': progress_label,
-            'title_label': title_label
+            'card': card,
+            'pbar': pbar,
+            'status': status_label
         }
 
-        return download_frame
-
-    def update_download_progress(self, download_id, progress):
-        """Update the progress bar for a specific download."""
+    def update_download_progress(self, download_id, progress, status=None):
+        """Update the progress card with value and status text."""
         if download_id in self.current_downloads:
-            download_info = self.current_downloads[download_id]
-            progress_bar = download_info['progress_bar']
-            progress_label = download_info['progress_label']
-
-            # Update the progress bar
-            progress_bar.set(progress)
-
-            # Update the percentage label
-            percent = int(progress * 100)
-            progress_label.configure(text=f"{percent}%")
+            info = self.current_downloads[download_id]
+            info['pbar'].set(progress)
+            
+            # Status display logic
+            if status == DownloadStatus.COMPLETED or progress >= 1.0:
+                info['status'].configure(text="DONE", text_color=Styles.ACCENT_GREEN)
+                info['pbar'].set(1.0)
+            elif status == DownloadStatus.FAILED:
+                info['status'].configure(text="FAILED", text_color="#FF4444")
+            elif status == DownloadStatus.DOWNLOADING or progress > 0:
+                percent = int(progress * 100)
+                info['status'].configure(text=f"{percent}%", text_color=Styles.TEXT_SECONDARY)
+            else:
+                info['status'].configure(text="Waiting...", text_color=Styles.TEXT_DIM)
 
     def update_overall_progress(self, completed, total):
-        """Update the overall progress bar and label."""
+        """Update the main progress bar and counter."""
         if total > 0:
-            overall_progress = completed / total
-            self.overall_progress_bar.set(overall_progress)
-            self.overall_progress_label.configure(text=f"{completed}/{total} tracks")
+            progress = completed / total
+            self.overall_progress_bar.set(progress)
+            self.overall_progress_label.configure(
+                text=f"Downloaded {completed} of {total} tracks",
+                text_color=Styles.ACCENT_GREEN if completed == total else Styles.TEXT_SECONDARY
+            )
         else:
             self.overall_progress_bar.set(0)
-            self.overall_progress_label.configure(text="0/0 tracks")
-
+            self.overall_progress_label.configure(text="0/0 tracks", text_color=Styles.TEXT_SECONDARY)
 
     def open_downloads(self):
-        download_path = os.path.abspath(self.download_service.download_path)
-        if not os.path.exists(download_path):
-            os.makedirs(download_path)
-        if os.name == 'nt':
-            os.startfile(download_path)
-        else:
-            subprocess.Popen(['open' if os.name == 'mac' else 'xdg-open', download_path])
+        path = os.path.abspath(self.download_service.download_path)
+        if not os.path.exists(path): os.makedirs(path)
+        cmd = 'open' if os.sys.platform == 'darwin' else 'xdg-open' if os.name != 'nt' else 'start'
+        if os.name == 'nt': os.startfile(path)
+        else: subprocess.Popen([cmd, path])
 
     def select_folder(self):
         new_path = ctk.filedialog.askdirectory()
@@ -334,8 +432,6 @@ class App(ctk.CTk):
             try:
                 self.download_service.set_download_path(new_path)
                 self.path_display.configure(text=os.path.abspath(new_path))
-                self.log(f"Destination changed to: {new_path}")
                 self.save_settings()
             except ValueError as e:
                 messagebox.showerror("Invalid Path", str(e))
-                self.log(f"Error setting download path: {e}")
