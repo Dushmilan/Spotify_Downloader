@@ -43,7 +43,9 @@ class CustomDownloadEngine:
                 progress_callback(1.0)
             return True
 
-        query = f"{song_name} {artist_name}".strip()
+        query = metadata.get('query')
+        if not query:
+            query = f"{song_name} {artist_name}".strip()
 
         if log_callback:
             log_callback(f"Searching for better match: {query}...")
@@ -108,7 +110,7 @@ class CustomDownloadEngine:
             'outtmpl': output_path,
             'postprocessors': [{
                 'key': 'FFmpegExtractAudio',
-                'preferredcodec': app_config.file_format,
+                'preferredcodec': app_config.file_.format,
                 'preferredquality': preferred_quality,
             }],
             # Using '0' for audio-quality ensures the best VBR/CBR encoding

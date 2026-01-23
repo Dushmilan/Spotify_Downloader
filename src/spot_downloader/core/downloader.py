@@ -129,13 +129,14 @@ class SpotDownloader:
             from spotify_scraper import SpotifyClient
 
             cache_file_path = None
-            if log_callback:
-                log_callback(f"Initiating download for: {url}")
-
-            if log_callback:
-                log_callback("Running Custom Download Engine...")
-
+            engine = None
             try:
+                if log_callback:
+                    log_callback(f"Initiating download for: {url}")
+
+                if log_callback:
+                    log_callback("Running Custom Download Engine...")
+
                 engine = CustomDownloadEngine(self.download_path)
 
                 metadata_list = []
@@ -381,13 +382,103 @@ class SpotDownloader:
                 handle_download_error(e, log_callback, "Main download process")
             finally:
                 if cache_file_path and os.path.exists(cache_file_path):
+                    all_succesfully_downloaded = False
                     try:
-                        os.remove(cache_file_path)
-                        if log_callback:
-                            log_callback("Cleaned up playlist cache.")
+                        # 1. Read cached playlist data
+                        with open(cache_file_path, "r", encoding="utf-8") as f:
+                            playlist_data = json.load(f)
+
+                        # 2. Get completed downloads from tracker
+                        completed_downloads = [d for d in tracker.get_all_downloads() if d.status == DownloadStatus.COMPLETED]
+                        completed_titles = {f"{d.artist.lower().strip()} - {d.title.lower().strip()}" for d in completed_downloads}
+
+                        tracks_container = playlist_data.get('tracks', playlist_data.get('items', []))
+                        tracks = tracks_container.get('items', tracks_container) if isinstance(tracks_container, dict) else tracks_container
+
+                        missing_tracks = []
+                        for item in tracks:
+                            track_data = item.get('track', item)
+                            if not track_data:
+                                continue
+
+                            song_name = track_data.get('name')
+                            artist_name = track_data.get('artists', [{}])[0].get('name')
+                            album_name = track_data.get('album', {}).get('name')
+
+                            if song_name and artist_name:
+                                full_title = f"{artist_name.lower().strip()} - {song_name.lower().strip()}"
+                                if full_title not in completed_titles:
+                                    missing_tracks.append({
+                                        'name': song_name,
+                                        'artist': artist_name,
+                                        'album': album_name,
+                                        'output_dir': os.path.dirname(cache_file_path) # Assuming cache is in playlist folder
+                                    })
+                        
+                        if missing_tracks:
+                            if log_callback:
+                                log_callback(f"Found {len(missing_tracks)} missing tracks. Retrying downloads...")
+
+                            for meta in missing_tracks:
+                                for i in range(3): # Retry up to 3 times
+                                    if log_callback:
+                                        log_callback(f"Retrying download for '{meta['name']}' (attempt {i+1}/3)...")
+
+                                    # Use more explicit search query
+                                    explicit_meta = meta.copy()
+                                    explicit_meta['query'] = f"{meta['name']} {meta['artist']} {meta['album']}"
+
+                                    self._download_track(explicit_meta, engine, progress_callback, log_callback, tracker)
+                                    
+                                    # After the download attempt, check if the file now exists
+                                    file_name = sanitize_filename(f"{meta['artist']} - {meta['name']}")
+                                    expected_path = os.path.join(meta['output_dir'], f"{file_name}.mp3")
+                                    if os.path.exists(expected_path):
+                                        if log_callback:
+                                            log_callback(f"Successfully downloaded missing track: '{meta['name']}'")
+                                        break
+                                    else:
+                                        if log_callback:
+                                            log_callback(f"Failed to download missing track: '{meta['name']}' on attempt {i+1}")
+                            
+                            # After retries, check again if there are missing tracks
+                            completed_downloads = [d for d in tracker.get_all_downloads() if d.status == DownloadStatus.COMPLETED]
+                            completed_titles = {f"{d.artist.lower().strip()} - {d.title.lower().strip()}" for d in completed_downloads}
+                            
+                            final_missing_tracks = []
+                            for item in tracks:
+                                track_data = item.get('track', item)
+                                if not track_data:
+                                    continue
+
+                                song_name = track_data.get('name')
+                                artist_name = track_data.get('artists', [{}])[0].get('name')
+
+                                if song_name and artist_name:
+                                    full_title = f"{artist_name.lower().strip()} - {song_name.lower().strip()}"
+                                    if full_title not in completed_titles:
+                                        final_missing_tracks.append(full_title)
+
+                            if not final_missing_tracks:
+                                all_succesfully_downloaded = True
+
+                        else:
+                            if log_callback:
+                                log_callback("All tracks downloaded successfully. No missing tracks found.")
+                            all_succesfully_downloaded = True
+
+                        # Finally, remove the cache file
+                        if all_succesfully_downloaded:
+                            os.remove(cache_file_path)
+                            if log_callback:
+                                log_callback("Cleaned up playlist cache.")
+                        else:
+                            if log_callback:
+                                log_callback("Some tracks failed to download after retries. Cache file will not be deleted.")
+
                     except Exception as e:
                         if log_callback:
-                            log_callback(f"Error deleting cache: {e}")
+                            log_callback(f"Error during verification and cleanup: {e}")
 
         thread = threading.Thread(target=run, daemon=True)
         thread.start()
