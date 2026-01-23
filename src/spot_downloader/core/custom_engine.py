@@ -4,6 +4,7 @@ from .searcher import YouTubeSearcher
 from ..utils.tagger import tag_mp3, tag_m4a
 from ..utils.validation import sanitize_filename
 from ..config import app_config
+from ..utils.throttle import Throttler
 
 class CustomDownloadEngine:
     def __init__(self, download_path="downloads"):
@@ -66,6 +67,8 @@ class CustomDownloadEngine:
         # file_name is already defined and sanitized above
         output_path = os.path.join(target_path, f"{file_name}.%(ext)s")
 
+        progress_throttler = Throttler(0.1)  # Throttle progress updates to every 100ms
+
         def ydl_progress_hook(d):
             if d['status'] == 'downloading':
                 # Log size in MB
@@ -82,7 +85,7 @@ class CustomDownloadEngine:
                     p = d.get('_percent_str', '0%').replace('%','').strip()
                     try:
                         progress_val = float(p) / 100
-                        progress_callback(progress_val)
+                        progress_throttler(progress_callback, progress_val)
                     except (ValueError, TypeError):
                         pass
             elif d['status'] == 'finished':

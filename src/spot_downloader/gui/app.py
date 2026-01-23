@@ -157,7 +157,7 @@ class App(ctk.CTk):
         self.overall_progress_label = ctk.CTkLabel(progress_container, text="0/0 tracks", font=Styles.SMALL_LABEL_FONT, text_color=Styles.TEXT_SECONDARY)
         self.overall_progress_label.grid(row=1, column=0, padx=15, pady=(0, 15), sticky="w")
 
-        self.downloads_scroll = ctk.CTkScrollableFrame(frame, fg_color="transparent")
+        self.downloads_scroll = ctk.CTkScrollableFrame(frame, fg_color="transparent", height=400)
         self.downloads_scroll.grid(row=2, column=0, padx=10, pady=10, sticky="nsew")
         self.downloads_scroll.grid_columnconfigure(0, weight=1)
 
@@ -387,6 +387,31 @@ class App(ctk.CTk):
             'pbar': pbar,
             'status': status_label
         }
+
+        # Bind scroll events to the card and all its children
+        self._bind_scroll(card)
+        for child in content.winfo_children():
+            self._bind_scroll(child)
+        self._bind_scroll(content)
+        self._bind_scroll(pbar)
+        self._bind_scroll(status_label)
+
+    def _bind_scroll(self, widget):
+        """Bind scroll events to a widget to ensure scrollable frame works properly."""
+        widget.bind("<MouseWheel>", self._on_mousewheel)
+        widget.bind("<Button-4>", self._on_mousewheel)
+        widget.bind("<Button-5>", self._on_mousewheel)
+
+    def _on_mousewheel(self, event):
+        """Redirect mousewheel events to the scrollable frame."""
+        # For Linux (Button-4 is scroll up, Button-5 is scroll down)
+        if event.num == 4:
+            self.downloads_scroll._parent_canvas.yview_scroll(-1, "units")
+        elif event.num == 5:
+            self.downloads_scroll._parent_canvas.yview_scroll(1, "units")
+        # For Windows/macOS
+        else:
+            self.downloads_scroll._parent_canvas.yview_scroll(int(-1*(event.delta/120)), "units")
 
     def update_download_progress(self, download_id, progress, status=None):
         """Update the progress card with value and status text."""
