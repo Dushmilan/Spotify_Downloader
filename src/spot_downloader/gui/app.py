@@ -177,7 +177,15 @@ class App(ctk.CTk):
     def on_tracker_change(self):
         """Called when the tracker changes."""
         # Use after to schedule the UI update in the main thread
-        self.after(0, self.update_ui_from_tracker)
+        # Only schedule if not already scheduled to prevent flooding
+        if not hasattr(self, '_tracker_update_scheduled') or not self._tracker_update_scheduled:
+            self._tracker_update_scheduled = True
+            self.after(10, self._update_ui_from_tracker_delayed)  # Small delay to debounce updates
+
+    def _update_ui_from_tracker_delayed(self):
+        """Delayed UI update to prevent flooding."""
+        self._tracker_update_scheduled = False
+        self.update_ui_from_tracker()
 
     def update_ui_from_tracker(self):
         """Update the UI based on the tracker."""
@@ -205,9 +213,11 @@ class App(ctk.CTk):
         self.update_overall_progress(completed, total)
 
     def log_finish_callback(self, message):
+        # Ensure UI updates happen on the main thread
         self.after(0, lambda: self.update_ui_with_message(message))
 
         if any(kw in message.lower() for kw in ["completed", "error", "finished", "all downloads finished"]):
+            # Ensure UI reset happens on the main thread
             self.after(0, self.reset_ui_after_download)
 
     def update_ui_with_message(self, message):
