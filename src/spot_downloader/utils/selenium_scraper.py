@@ -120,11 +120,25 @@ def scrape_playlist(playlist_url, headless=True, log_callback=None):
         
         # Get playlist name
         playlist_name = "Unknown Playlist"
-        try:
-            name_elem = driver.find_element(By.CSS_SELECTOR, 'h1')
-            playlist_name = name_elem.text.strip()
-        except:
-            pass
+        name_selectors = [
+            (By.CSS_SELECTOR, 'h1[data-testid="entityTitle"]'),
+            (By.CSS_SELECTOR, 'h1'),
+            (By.XPATH, "//h1"),
+            (By.CSS_SELECTOR, 'span[data-testid="entityTitle"]'),
+        ]
+        
+        for by, selector in name_selectors:
+            try:
+                name_elem = WebDriverWait(driver, 5).until(
+                    EC.presence_of_element_located((by, selector))
+                )
+                text = name_elem.text.strip()
+                if text:
+                    playlist_name = text
+                    if log_callback: log_callback(f"Found playlist name: {playlist_name}")
+                    break
+            except:
+                continue
 
         scrollable_element = find_scrollable_container(driver)
         
