@@ -7,3 +7,5 @@ requests
 yt-dlp
 mutagen
 urllib3
+playwright
+selenium
