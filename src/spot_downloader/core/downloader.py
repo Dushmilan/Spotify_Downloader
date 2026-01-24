@@ -146,25 +146,25 @@ class SpotDownloader:
                     if log_callback:
                         log_callback("Validated as Spotify URL")
 
-                    # Use SpotifyClient to fetch real data
+                    # Use SpotifyClient or selenium_scraper to fetch real data
                     if "playlist" in url:
                         if log_callback:
-                            log_callback("Fetching playlist details from Spotify...")
+                            log_callback("Using Selenium to scrape playlist tracks...")
 
                         try:
-                            client = SpotifyClient()
-                            playlist_data = client.get_playlist_info(url)
+                            from ..utils.selenium_scraper import scrape_playlist
+                            playlist_data = scrape_playlist(url, headless=True, log_callback=log_callback)
 
                             if not playlist_data:
                                 if log_callback:
-                                    log_callback("Failed to fetch playlist data from Spotify, using fallback...")
+                                    log_callback("Failed to scrape playlist data, using fallback...")
                                 playlist_data = FAKE_PLAYLIST_DATA  # Fallback to mock data
                             else:
                                 if log_callback:
-                                    log_callback("Successfully fetched playlist data from Spotify")
+                                    log_callback("Successfully scraped playlist data")
 
                         except Exception as e:
-                            handle_download_error(e, log_callback, "Fetching playlist from Spotify")
+                            handle_download_error(e, log_callback, "Scraping playlist with Selenium")
                             if log_callback:
                                 log_callback("Using fallback mock data...")
                             playlist_data = FAKE_PLAYLIST_DATA  # Fallback to mock data
@@ -198,7 +198,10 @@ class SpotDownloader:
                                 log_callback(f"Failed to save playlist cache: {e}")
 
                         tracks_container = playlist_data.get('tracks', playlist_data.get('items', []))
-                        tracks = tracks_container if isinstance(tracks_container, list) else []
+                        if isinstance(tracks_container, dict):
+                            tracks = tracks_container.get('items', [])
+                        else:
+                            tracks = tracks_container if isinstance(tracks_container, list) else []
 
                         if log_callback:
                             log_callback(f"Found {len(tracks)} tracks in '{playlist_name}'. Processing list...")

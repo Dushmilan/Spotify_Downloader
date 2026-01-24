@@ -13,8 +13,8 @@ from .error_handling import (
     log_error,
     handle_download_error
 )
-from .spotify_bulk_operations import (
-    SpotifyBulkOperations,
-    get_all_playlist_tracks,
-    get_all_album_tracks
-)
+# from .spotify_bulk_operations import (
+#     SpotifyBulkOperations,
+#     get_all_playlist_tracks,
+#     get_all_album_tracks
+# )
