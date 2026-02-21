@@ -62,7 +62,27 @@ def handle_cookie_consent(driver):
 def find_scrollable_container(driver):
     """
     Find the correct scrollable container for the playlist
+    Prioritizes the container with class eaxF79s4oV8I2CPQ
     """
+    # First, try to find a scrollable parent of the specific container
+    try:
+        specific_container = driver.find_element(By.CSS_SELECTOR, '.eaxF79s4oV8I2CPQ')
+        # Find scrollable parent
+        scrollable_parent = driver.execute_script("""
+            let element = arguments[0];
+            while (element) {
+                element = element.parentElement;
+                if (element && element.scrollHeight > element.clientHeight + 100) {
+                    return element;
+                }
+            }
+            return null;
+        """, specific_container)
+        if scrollable_parent:
+            return scrollable_parent
+    except:
+        pass
+    
     selectors = [
         'div[data-overlayscrollbars-viewport]',
         'div.main-view-container__scroll-node',
@@ -118,6 +138,16 @@ def scrape_playlist(playlist_url, headless=True, log_callback=None):
 
         handle_cookie_consent(driver)
         
+        # Wait for the specific container with class eaxF79s4oV8I2CPQ
+        if log_callback: log_callback("Waiting for playlist container to load...")
+        try:
+            WebDriverWait(driver, 15).until(
+                EC.presence_of_element_located((By.CSS_SELECTOR, '.eaxF79s4oV8I2CPQ'))
+            )
+            if log_callback: log_callback("Found playlist container (.eaxF79s4oV8I2CPQ)")
+        except TimeoutException:
+            if log_callback: log_callback("Warning: Container .eaxF79s4oV8I2CPQ not found, proceeding anyway...")
+        
         # Get playlist name - be more specific to avoid sidebar elements
         playlist_name = "Unknown Playlist"
         
@@ -156,14 +186,45 @@ def scrape_playlist(playlist_url, headless=True, log_callback=None):
         max_no_change = 3
         scroll_count = 0
         max_scrolls = 100
+        recommended_y_position = None
         
         if log_callback: log_callback("Starting to scrape tracks...")
 
         while scroll_count < max_scrolls:
+            # Check for "Recommended" section and get its position
             try:
-                track_elements = driver.find_elements(By.CSS_SELECTOR, '[data-testid="tracklist-row"]')
+                recommended_elements = driver.find_elements(By.XPATH, "//*[contains(text(), 'Recommended')]")
+                if recommended_elements:
+                    for elem in recommended_elements:
+                        try:
+                            # Get the absolute Y position of the Recommended element
+                            elem_y = driver.execute_script(
+                                "return arguments[0].getBoundingClientRect().top + window.pageYOffset;", 
+                                elem
+                            )
+                            if recommended_y_position is None or elem_y < recommended_y_position:
+                                recommended_y_position = elem_y
+                                if log_callback: log_callback(f"Found 'Recommended' section at position: {recommended_y_position}")
+                        except:
+                            pass
+            except:
+                pass
+            
+            try:
+                # Scrape tracks only from the specific container
+                track_elements = driver.find_elements(By.CSS_SELECTOR, '.eaxF79s4oV8I2CPQ [data-testid="tracklist-row"]')
                 
                 for track_element in track_elements:
+                    # Check if track is above the "Recommended" section
+                    if recommended_y_position is not None:
+                        track_y = driver.execute_script(
+                            "return arguments[0].getBoundingClientRect().top + window.pageYOffset;", 
+                            track_element
+                        )
+                        if track_y >= recommended_y_position:
+                            # Track is at or below "Recommended" section, skip it
+                            continue
+                    
                     try:
                         # Use a combination of title and artist as ID
                         title = ""
@@ -245,6 +306,11 @@ def scrape_playlist(playlist_url, headless=True, log_callback=None):
                 window_height = driver.execute_script("return window.innerHeight;")
                 at_bottom = (current_scroll + window_height) >= (scroll_height - 100)
 
+            # Check if we've reached the "Recommended" section - stop scrolling if found
+            if recommended_y_position is not None:
+                if log_callback: log_callback("Reached 'Recommended' section, stopping scrape.")
+                break
+            
             if current_track_count == last_track_count:
                 no_change_count += 1
                 if at_bottom and no_change_count >= max_no_change:
