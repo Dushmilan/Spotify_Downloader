@@ -13,6 +13,13 @@ def setup_driver(headless=True):
     Initialize Chrome WebDriver with options
     """
     chrome_options = Options()
+
+    prefs = {
+        "profile.managed_default_content_settings.images": 2, # Block images
+        "profile.managed_default_content_settings.stylesheet": 2, # Block CSS
+        "profile.managed_default_content_settings.fonts": 2 # Block fonts
+    }
+    chrome_options.add_experimental_option("prefs", prefs)
     
     if headless:
         chrome_options.add_argument('--headless=new')
