@@ -118,27 +118,34 @@ def scrape_playlist(playlist_url, headless=True, log_callback=None):
 
         handle_cookie_consent(driver)
         
-        # Get playlist name
+        # Get playlist name - be more specific to avoid sidebar elements
         playlist_name = "Unknown Playlist"
-        name_selectors = [
-            (By.CSS_SELECTOR, 'h1[data-testid="entityTitle"]'),
-            (By.CSS_SELECTOR, 'h1'),
-            (By.XPATH, "//h1"),
-            (By.CSS_SELECTOR, 'span[data-testid="entityTitle"]'),
-        ]
         
-        for by, selector in name_selectors:
+        # First, try the most specific selector for playlist title
+        try:
+            # Spotify's playlist title is in h1 with data-testid="entityTitle" inside the main content area
+            name_elem = WebDriverWait(driver, 10).until(
+                EC.presence_of_element_located((By.CSS_SELECTOR, 'h1[data-testid="entityTitle"]'))
+            )
+            text = name_elem.text.strip()
+            if text and text not in ['Your Library', 'Home', 'Search', 'Browse']:
+                playlist_name = text
+                if log_callback: log_callback(f"Found playlist name: {playlist_name}")
+        except:
+            # Fallback: look for h1 in the main content area specifically
             try:
-                name_elem = WebDriverWait(driver, 5).until(
-                    EC.presence_of_element_located((by, selector))
-                )
-                text = name_elem.text.strip()
-                if text:
-                    playlist_name = text
-                    if log_callback: log_callback(f"Found playlist name: {playlist_name}")
-                    break
+                # Find h1 elements within the main view container (not sidebar)
+                main_content = driver.find_element(By.CSS_SELECTOR, 'div.main-view-container, div[data-testid="playlist-page"], main')
+                h1_elements = main_content.find_elements(By.TAG_NAME, 'h1')
+                for h1 in h1_elements:
+                    text = h1.text.strip()
+                    # Skip common sidebar/library headers
+                    if text and text not in ['Your Library', 'Home', 'Search', 'Browse', '']:
+                        playlist_name = text
+                        if log_callback: log_callback(f"Found playlist name: {playlist_name}")
+                        break
             except:
-                continue
+                if log_callback: log_callback("Could not find playlist name, using default")
 
         scrollable_element = find_scrollable_container(driver)
         

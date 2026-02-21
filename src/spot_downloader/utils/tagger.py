@@ -55,8 +55,15 @@ def tag_mp3(file_path, metadata):
             artist_text = str(metadata.get('artist', ''))
         tags.add(TPE1(encoding=3, text=artist_text))
 
-        album_name = metadata.get('album_name', '') if metadata.get('album_name') else ''
+        # Use playlist_name as album if available (for playlist downloads), 
+        # otherwise use the original album name
+        album_name = metadata.get('playlist_name', '') or metadata.get('album', '') or metadata.get('album_name', '')
         tags.add(TALB(encoding=3, text=str(album_name)))
+
+        # Add playlist name as comment if available (preserves original album)
+        playlist_name = metadata.get('playlist_name', '') if metadata.get('playlist_name') else ''
+        if playlist_name:
+            tags.add(COMM(encoding=3, lang='eng', desc='Playlist', text=str(playlist_name)))
 
         year = metadata.get('year', '') if metadata.get('year') else ''
         tags.add(TYER(encoding=3, text=str(year)))
@@ -150,8 +157,15 @@ def tag_m4a(file_path, metadata):
             artist_text = str(metadata.get('artist', ''))
         audio["\xa9ART"] = artist_text
 
-        album_name = metadata.get('album_name', '') if metadata.get('album_name') else ''
+        # Use playlist_name as album if available (for playlist downloads), 
+        # otherwise use the original album name
+        album_name = metadata.get('playlist_name', '') or metadata.get('album', '') or metadata.get('album_name', '')
         audio["\xa9alb"] = str(album_name)
+
+        # Add playlist name as comment if available (preserves original album)
+        playlist_name = metadata.get('playlist_name', '') if metadata.get('playlist_name') else ''
+        if playlist_name:
+            audio["\xa9cmt"] = str(playlist_name)
 
         year = metadata.get('year', '') if metadata.get('year') else ''
         audio["\xa9day"] = str(year)

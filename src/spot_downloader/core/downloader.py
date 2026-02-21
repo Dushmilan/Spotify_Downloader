@@ -239,7 +239,8 @@ class SpotDownloader:
                                 'artist': artist_name,
                                 'duration_ms': track_data.get('duration_ms'),
                                 'album': track_data.get('album', {}).get('name', ''),
-                                'output_dir': playlist_folder
+                                'output_dir': playlist_folder,
+                                'playlist_name': playlist_name
                             }
                             metadata_list.append(meta)
 
@@ -415,7 +416,8 @@ class SpotDownloader:
                                         'name': song_name,
                                         'artist': artist_name,
                                         'album': album_name,
-                                        'output_dir': os.path.dirname(cache_file_path) # Assuming cache is in playlist folder
+                                        'output_dir': os.path.dirname(cache_file_path), # Assuming cache is in playlist folder
+                                        'playlist_name': playlist_data.get('name', 'Unknown Playlist')
                                     })
                         
                         if missing_tracks:
