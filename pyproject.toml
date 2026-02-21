@@ -25,6 +25,7 @@ dependencies = [
     "requests",
     "pillow",
     "urllib3",
+    "imageio-ffmpeg",
 ]
 
 [project.urls]

@@ -9,6 +9,7 @@ from .validation import is_safe_url
 def tag_mp3(file_path, metadata):
     """
     Tags an MP3 file with metadata and album art.
+    Track name is tagged first before any other metadata.
     """
     # Validate file path to prevent directory traversal
     if not file_path or not isinstance(file_path, str):
@@ -38,9 +39,12 @@ def tag_mp3(file_path, metadata):
             pass
 
         tags = audio.tags
-        # Safely get metadata values with defaults
+        
+        # === TAG TRACK NAME FIRST ===
         name = metadata.get('name', '') if metadata.get('name') else ''
+        print(f"Tagging track: {name}")
         tags.add(TIT2(encoding=3, text=str(name)))
+        # === END TRACK NAME TAGGING ===
 
         # Process artists safely
         artists = metadata.get('artists', [])
@@ -107,6 +111,7 @@ def tag_mp3(file_path, metadata):
 def tag_m4a(file_path, metadata):
     """
     Tags an M4A/MP4 file with metadata and album art.
+    Track name is tagged first before any other metadata.
     """
     # Validate file path to prevent directory traversal
     if not file_path or not isinstance(file_path, str):
@@ -130,9 +135,11 @@ def tag_m4a(file_path, metadata):
             print(f"Error: Could not load M4A/MP4 file: {file_path}")
             return False
 
-        # Safely get metadata values with defaults
+        # === TAG TRACK NAME FIRST ===
         name = metadata.get('name', '') if metadata.get('name') else ''
+        print(f"Tagging track: {name}")
         audio["\xa9nam"] = str(name)
+        # === END TRACK NAME TAGGING ===
 
         # Process artists safely
         artists = metadata.get('artists', [])

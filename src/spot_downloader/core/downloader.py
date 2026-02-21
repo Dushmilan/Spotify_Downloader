@@ -223,10 +223,10 @@ class SpotDownloader:
                                 artist_name = 'Unknown Artist'
 
                             # Sanitize file name to prevent directory traversal
-                            file_name = f"{artist_name} - {song_name}"
+                            file_name = f"{song_name} - {artist_name}"
                             file_name = sanitize_filename(file_name)
                             if not file_name:
-                                file_name = "Unknown_Artist - Unknown_Song"
+                                file_name = "Unknown_Song - Unknown_Artist"
 
                             expected_path = os.path.join(playlist_folder, f"{file_name}.mp3")
 
@@ -274,7 +274,7 @@ class SpotDownloader:
                                 }
                                 metadata_list.append(meta)
                                 if log_callback:
-                                    log_callback(f"Fetched track info: {artist_name} - {song_name}")
+                                    log_callback(f"Fetched track info: {song_name} - {artist_name}")
                             else:
                                 if log_callback:
                                     log_callback("Failed to fetch track info, using fallback...")
@@ -323,10 +323,10 @@ class SpotDownloader:
                                         artist_name = album_info.get('artists', [{}])[0].get('name', 'Unknown Artist') if album_info.get('artists', []) else 'Unknown Artist'
 
                                     # Sanitize file name
-                                    file_name = f"{artist_name} - {song_name}"
+                                    file_name = f"{song_name} - {artist_name}"
                                     file_name = sanitize_filename(file_name)
                                     if not file_name:
-                                        file_name = "Unknown_Artist - Unknown_Song"
+                                        file_name = "Unknown_Song - Unknown_Artist"
 
                                     expected_path = os.path.join(album_folder, f"{file_name}.mp3")
 
@@ -393,7 +393,7 @@ class SpotDownloader:
 
                         # 2. Get completed downloads from tracker
                         completed_downloads = [d for d in tracker.get_all_downloads() if d.status == DownloadStatus.COMPLETED]
-                        completed_titles = {f"{d.artist.lower().strip()} - {d.title.lower().strip()}" for d in completed_downloads}
+                        completed_titles = {f"{d.title.lower().strip()} - {d.artist.lower().strip()}" for d in completed_downloads}
 
                         tracks_container = playlist_data.get('tracks', playlist_data.get('items', []))
                         tracks = tracks_container.get('items', tracks_container) if isinstance(tracks_container, dict) else tracks_container
@@ -409,7 +409,7 @@ class SpotDownloader:
                             album_name = track_data.get('album', {}).get('name')
 
                             if song_name and artist_name:
-                                full_title = f"{artist_name.lower().strip()} - {song_name.lower().strip()}"
+                                full_title = f"{song_name.lower().strip()} - {artist_name.lower().strip()}"
                                 if full_title not in completed_titles:
                                     missing_tracks.append({
                                         'name': song_name,
@@ -434,7 +434,7 @@ class SpotDownloader:
                                     self._download_track(explicit_meta, engine, progress_callback, log_callback, tracker)
                                     
                                     # After the download attempt, check if the file now exists
-                                    file_name = sanitize_filename(f"{meta['artist']} - {meta['name']}")
+                                    file_name = sanitize_filename(f"{meta['name']} - {meta['artist']}")
                                     expected_path = os.path.join(meta['output_dir'], f"{file_name}.mp3")
                                     if os.path.exists(expected_path):
                                         if log_callback:
@@ -446,7 +446,7 @@ class SpotDownloader:
                             
                             # After retries, check again if there are missing tracks
                             completed_downloads = [d for d in tracker.get_all_downloads() if d.status == DownloadStatus.COMPLETED]
-                            completed_titles = {f"{d.artist.lower().strip()} - {d.title.lower().strip()}" for d in completed_downloads}
+                            completed_titles = {f"{d.title.lower().strip()} - {d.artist.lower().strip()}" for d in completed_downloads}
                             
                             final_missing_tracks = []
                             for item in tracks:
@@ -457,8 +457,8 @@ class SpotDownloader:
                                 song_name = track_data.get('name')
                                 artist_name = track_data.get('artists', [{}])[0].get('name')
 
-                                if song_name and artist_name:
-                                    full_title = f"{artist_name.lower().strip()} - {song_name.lower().strip()}"
+                            if song_name and artist_name:
+                                    full_title = f"{song_name.lower().strip()} - {artist_name.lower().strip()}"
                                     if full_title not in completed_titles:
                                         final_missing_tracks.append(full_title)
 

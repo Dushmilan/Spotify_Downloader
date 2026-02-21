@@ -15,8 +15,6 @@ A modern, secure GUI-based application for downloading Spotify songs and playlis
 
 ## Prerequisites
 - **Python 3.8+**
-- **FFmpeg**: Required by `yt-dlp` for audio conversion.
-    - [Download FFmpeg](https://ffmpeg.org/download.html) and add it to your system PATH.
 
 ## Installation
 1. Clone the repository.
@@ -25,7 +23,9 @@ A modern, secure GUI-based application for downloading Spotify songs and playlis
    pip install -r requirements.txt
    ```
 
-   Note: The application uses `spotifyscraper` which installs as the `spotify_scraper` module. This provides the SpotifyClient class needed to fetch real Spotify data.
+   That's it! FFmpeg is automatically installed via the `imageio-ffmpeg` package - no manual setup required.
+
+   > **Note**: The application uses `spotifyscraper` which installs as the `spotify_scraper` module. This provides the SpotifyClient class needed to fetch real Spotify data.
 
 ## Usage
 Run the application using:
@@ -82,7 +82,11 @@ If you encounter issues:
    pip install spotifyscraper
    ```
 
-2. **FFmpeg not found**: Ensure FFmpeg is installed and in your system PATH.
+2. **FFmpeg not found**: The app automatically uses bundled FFmpeg via `imageio-ffmpeg`. If you still see this error, try:
+   ```bash
+   pip install imageio-ffmpeg
+   ```
+   Alternatively, you can install FFmpeg manually and add it to your system PATH.
 
 3. **Spotify anti-bot measures**: The application may occasionally be blocked by Spotify. Try reducing the number of concurrent downloads in the configuration.
 

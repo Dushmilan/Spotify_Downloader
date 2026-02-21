@@ -5,6 +5,7 @@ from ..utils.tagger import tag_mp3, tag_m4a
 from ..utils.validation import sanitize_filename
 from ..config import app_config
 from ..utils.throttle import Throttler
+from ..utils.helpers import get_ffmpeg_path
 
 class CustomDownloadEngine:
     def __init__(self, download_path="downloads"):
@@ -25,11 +26,11 @@ class CustomDownloadEngine:
         artist_name = metadata.get('artist', 'Unknown Artist')
 
         # 1. Check if file already exists
-        file_name = f"{artist_name} - {song_name}"
+        file_name = f"{song_name} - {artist_name}"
         # Sanitize filename to prevent directory traversal and invalid characters
         file_name = sanitize_filename(file_name)
         if not file_name or file_name.isspace():
-            file_name = "Unknown_Artist - Unknown_Song"
+            file_name = "Unknown_Song - Unknown_Artist"
 
         final_file_path = os.path.join(target_path, f"{file_name}.mp3")
 
@@ -105,6 +106,9 @@ class CustomDownloadEngine:
         }
         preferred_quality = quality_map.get(app_config.download_quality, '320')
 
+        # Get FFmpeg location (system or bundled via imageio-ffmpeg)
+        ffmpeg_exe = get_ffmpeg_path()
+
         ydl_opts = {
             'format': 'bestaudio/best',
             'outtmpl': output_path,
@@ -122,6 +126,10 @@ class CustomDownloadEngine:
             'connect_timeout': app_config.timeout_seconds,  # Connection timeout from config
             'retries': app_config.retry_attempts,  # Number of retries for failed downloads from config
         }
+
+        # Set FFmpeg location if using bundled version
+        if ffmpeg_exe:
+            ydl_opts['ffmpeg_location'] = os.path.dirname(ffmpeg_exe)
 
         try:
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
