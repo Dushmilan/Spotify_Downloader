@@ -12,7 +12,7 @@ from ..tracker import DownloadTracker, DownloadStatus
 from .styles import Styles
 
 class App(ctk.CTk):
-    def __init__(self):
+    def __init__(self, download_service=None):
         super().__init__()
 
         self.title("Spot-Downloader Desktop")
@@ -21,7 +21,8 @@ class App(ctk.CTk):
         # Apply professional theme from styles
         Styles.apply_theme()
 
-        self.download_service = DownloadService()
+        # Dependency injection for testability
+        self.download_service = download_service or DownloadService()
         self.download_thread = None
         self.setup_ui()
         self.load_settings()

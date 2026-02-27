@@ -26,6 +26,7 @@ dependencies = [
     "pillow",
     "urllib3",
     "imageio-ffmpeg",
+    "pydantic>=2.0.0",
 ]
 
 [project.optional-dependencies]
