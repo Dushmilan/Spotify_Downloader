@@ -1,4 +1,7 @@
 import os
+from ..utils.logger import get_logger
+
+logger = get_logger(__name__)
 from mutagen.mp3 import MP3
 from mutagen.id3 import ID3, TIT2, TPE1, TALB, TYER, APIC, TRCK, COMM
 from mutagen.mp4 import MP4, MP4Cover
@@ -18,19 +21,19 @@ def tag_mp3(file_path, metadata):
 
     # Check if file exists and is within allowed directories
     if not os.path.isfile(file_path):
-        print(f"Error: File does not exist: {file_path}")
+        logger.error(f"File does not exist: {file_path}")
         return False
 
     # Verify file extension
     _, ext = os.path.splitext(file_path.lower())
     if ext != '.mp3':
-        print(f"Error: File is not an MP3: {file_path}")
+        logger.error(f"File is not an MP3: {file_path}")
         return False
 
     try:
         audio = MP3(file_path, ID3=ID3)
         if audio is None:
-            print(f"Error: Could not load MP3 file: {file_path}")
+            logger.error(f"Could not load MP3 file: {file_path}")
             return False
 
         try:
@@ -42,7 +45,7 @@ def tag_mp3(file_path, metadata):
         
         # === TAG TRACK NAME FIRST ===
         name = metadata.get('name', '') if metadata.get('name') else ''
-        print(f"Tagging track: {name}")
+        logger.debug(f"Tagging track: {name}")
         tags.add(TIT2(encoding=3, text=str(name)))
         # === END TRACK NAME TAGGING ===
 
@@ -83,7 +86,7 @@ def tag_mp3(file_path, metadata):
                 # Validate URL before requesting
                 parsed_url = urlparse(str(cover_url))
                 if parsed_url.scheme not in ['http', 'https']:
-                    print("Error: Invalid URL scheme for album art")
+                    logger.error("Invalid URL scheme for album art")
                     return False
 
                 response = requests.get(str(cover_url), timeout=10)
@@ -91,7 +94,7 @@ def tag_mp3(file_path, metadata):
                     # Limit image size to prevent resource exhaustion
                     content_length = response.headers.get('content-length')
                     if content_length and int(content_length) > 10 * 1024 * 1024:  # 10MB limit
-                        print("Error: Album art exceeds size limit")
+                        logger.error("Album art exceeds size limit")
                         return False
 
                     img_data = response.content
@@ -105,14 +108,14 @@ def tag_mp3(file_path, metadata):
                             data=img_data
                         ))
             except requests.exceptions.RequestException as e:
-                print(f"Failed to download album art: {e}")
+                logger.error(f"Failed to download album art: {e}")
             except Exception as e:
-                print(f"Failed to add album art: {e}")
+                logger.error(f"Failed to add album art: {e}")
 
         audio.save()
         return True
     except Exception as e:
-        print(f"Error tagging MP3: {e}")
+        logger.error(f"Error tagging MP3: {e}")
         return False
 
 def tag_m4a(file_path, metadata):
@@ -127,24 +130,24 @@ def tag_m4a(file_path, metadata):
 
     # Check if file exists and is within allowed directories
     if not os.path.isfile(file_path):
-        print(f"Error: File does not exist: {file_path}")
+        logger.error(f"File does not exist: {file_path}")
         return False
 
     # Verify file extension
     _, ext = os.path.splitext(file_path.lower())
     if ext not in ['.m4a', '.mp4']:
-        print(f"Error: File is not an M4A/MP4: {file_path}")
+        logger.error(f"File is not an M4A/MP4: {file_path}")
         return False
 
     try:
         audio = MP4(file_path)
         if audio is None:
-            print(f"Error: Could not load M4A/MP4 file: {file_path}")
+            logger.error(f"Could not load M4A/MP4 file: {file_path}")
             return False
 
         # === TAG TRACK NAME FIRST ===
         name = metadata.get('name', '') if metadata.get('name') else ''
-        print(f"Tagging track: {name}")
+        logger.debug(f"Tagging track: {name}")
         audio["\xa9nam"] = str(name)
         # === END TRACK NAME TAGGING ===
 
@@ -186,7 +189,7 @@ def tag_m4a(file_path, metadata):
                 # Validate URL before requesting
                 parsed_url = urlparse(str(cover_url))
                 if parsed_url.scheme not in ['http', 'https']:
-                    print("Error: Invalid URL scheme for album art")
+                    logger.error("Invalid URL scheme for album art")
                     return False
 
                 response = requests.get(str(cover_url), timeout=10)
@@ -194,7 +197,7 @@ def tag_m4a(file_path, metadata):
                     # Limit image size to prevent resource exhaustion
                     content_length = response.headers.get('content-length')
                     if content_length and int(content_length) > 10 * 1024 * 1024:  # 10MB limit
-                        print("Error: Album art exceeds size limit")
+                        logger.error("Album art exceeds size limit")
                         return False
 
                     img_data = response.content
@@ -202,12 +205,12 @@ def tag_m4a(file_path, metadata):
                     if img_data and len(img_data) > 0:
                         audio["covr"] = [MP4Cover(img_data, imageformat=MP4Cover.FORMAT_JPEG)]
             except requests.exceptions.RequestException as e:
-                print(f"Failed to download album art: {e}")
+                logger.error(f"Failed to download album art: {e}")
             except Exception as e:
-                print(f"Failed to add album art: {e}")
+                logger.error(f"Failed to add album art: {e}")
 
         audio.save()
         return True
     except Exception as e:
-        print(f"Error tagging M4A: {e}")
+        logger.error(f"Error tagging M4A: {e}")
         return False

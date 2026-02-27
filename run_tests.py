@@ -1,22 +1,34 @@
+"""
+Test runner for the Spotify Downloader project.
+"""
+
 import pytest
 import sys
 import os
 
 if __name__ == "__main__":
-    print("🚀 Starting Spot-Downloader Desktop Test Suite...\n")
-    
+    print("=" * 60)
+    print("Spotify Downloader - Test Suite")
+    print("=" * 60)
+    print()
+
     # Run pytest on the tests directory
     args = [
         "tests",
         "-v",
-        "--tb=short"
+        "--tb=short",
+        "--cov=src/spot_downloader",
+        "--cov-report=term-missing",
     ]
-    
+
     exit_code = pytest.main(args)
-    
+
+    print()
+    print("=" * 60)
     if exit_code == 0:
-        print("\n✅ All tests passed!")
+        print("[SUCCESS] All tests passed!")
     else:
-        print(f"\n❌ Some tests failed (Exit code: {exit_code})")
-    
+        print(f"[WARN] Some tests failed (Exit code: {exit_code})")
+    print("=" * 60)
+
     sys.exit(exit_code)

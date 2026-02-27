@@ -7,6 +7,7 @@ from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException
+from ..utils.rate_limiter import rate_limit
 
 
 def setup_driver(headless=True):
@@ -32,7 +33,7 @@ def setup_driver(headless=True):
     try:
         return webdriver.Chrome(options=chrome_options)
     except Exception as e:
-        print(f"Error setting up Chrome driver: {e}")
+        log(f"Error setting up Chrome driver: {e}")
         return None
 
 
@@ -251,6 +252,7 @@ def harvest_rows(driver, tracks_by_rownum, seen_title_artists):
     return added
 
 
+@rate_limit(calls=5, period=60)  # 5 playlists per minute to avoid Spotify bans
 def scrape_playlist(playlist_url, headless=True, log_callback=None):
     def log(msg):
         if log_callback:
@@ -390,4 +392,9 @@ def scrape_playlist(playlist_url, headless=True, log_callback=None):
         log(f"Unhandled error: {e}")
         return None
     finally:
-        driver.quit()
+        # Only quit driver if it was successfully initialized
+        if 'driver' in locals() and driver is not None:
+            try:
+                driver.quit()
+            except Exception as quit_error:
+                log(f"Error closing browser: {quit_error}")

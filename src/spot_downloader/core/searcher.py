@@ -7,6 +7,7 @@ from urllib3.util.retry import Retry
 from requests.adapters import HTTPAdapter
 from ..config import app_config
 from ..utils.logger import get_logger
+from ..utils.rate_limiter import rate_limit
 from ..utils.retry import retry
 
 logger = get_logger(__name__)
@@ -31,6 +32,7 @@ def _get_search_session():
 
 class YouTubeSearcher:
     @staticmethod
+    @rate_limit(calls=10, period=60)  # 10 calls per minute to avoid YouTube bans
     @retry(max_attempts=3, delay=1.0, backoff=2.0, exceptions=(requests.RequestException,))
     def _fetch_search_results(search_url, headers):
         """Fetch search results with retry logic."""

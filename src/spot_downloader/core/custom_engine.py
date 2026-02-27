@@ -3,6 +3,9 @@ import yt_dlp
 from .searcher import YouTubeSearcher
 from ..utils.tagger import tag_mp3, tag_m4a
 from ..utils.validation import sanitize_filename
+from ..utils.logger import get_logger
+
+logger = get_logger(__name__)
 from ..config import app_config
 from ..utils.throttle import Throttler
 from ..utils.helpers import get_ffmpeg_path
@@ -146,13 +149,15 @@ class CustomDownloadEngine:
                     log_callback(f"Successfully downloaded and tagged: {file_name}")
                 return True
             else:
-                if log_callback:
-                    log_callback("Error: Downloaded file not found after conversion.")
+                logger.error("Downloaded file not found after conversion.")
+            if log_callback:
+                log_callback("Error: Downloaded file not found after conversion.")
                 return False
 
         except yt_dlp.DownloadError as e:
+            logger.error(f"Download error (yt-dlp): {str(e)}")
             if log_callback:
-                log_callback(f"Download error (yt-dlp): {str(e)}")
+                log_callback(f"Download error (yt-dlp): {str(e)}"),
             return False
         except Exception as e:
             if log_callback:
