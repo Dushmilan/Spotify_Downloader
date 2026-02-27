@@ -6,8 +6,39 @@ import time
 from urllib3.util.retry import Retry
 from requests.adapters import HTTPAdapter
 from ..config import app_config
+from ..utils.logger import get_logger
+from ..utils.retry import retry
+
+logger = get_logger(__name__)
+
+# Shared session for connection pooling
+_search_session = None
+
+def _get_search_session():
+    """Get or create shared search session with retry configuration."""
+    global _search_session
+    if _search_session is None:
+        _search_session = requests.Session()
+        retry_strategy = Retry(
+            total=3,
+            backoff_factor=1,
+            status_forcelist=[429, 500, 502, 503, 504],
+        )
+        adapter = HTTPAdapter(max_retries=retry_strategy)
+        _search_session.mount("http://", adapter)
+        _search_session.mount("https://", adapter)
+    return _search_session
 
 class YouTubeSearcher:
+    @staticmethod
+    @retry(max_attempts=3, delay=1.0, backoff=2.0, exceptions=(requests.RequestException,))
+    def _fetch_search_results(search_url, headers):
+        """Fetch search results with retry logic."""
+        session = _get_search_session()
+        response = session.get(search_url, headers=headers, timeout=15)
+        response.raise_for_status()
+        return response.text
+
     @staticmethod
     def search_ytm(query, duration_ms=None):
         """
@@ -23,47 +54,25 @@ class YouTubeSearcher:
         if not query:
             return None
 
-        # Only print in debug mode
-        if app_config.log_level.upper() == "DEBUG":
-            print(f"Searching YTM for: {query}")
+        logger.debug(f"Searching YTM for: {query}")
 
         # We use a specific search query to target YTM 'songs' category
         search_query = f"{query} official audio"
         encoded_query = urllib.parse.quote(search_query)
-
-        # Using the standard YT search with filters or YTM-specific data if possible
-        # For now, we use a robust YT search regex fallback as a pure-requests approach
-        # is more stable than depending on fickle YTM libraries.
 
         search_url = f"https://www.youtube.com/results?search_query={encoded_query}"
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
         }
 
-        # Create a session with retry strategy
-        session = requests.Session()
-
-        # Define retry strategy
-        retry_strategy = Retry(
-            total=3,
-            backoff_factor=1,
-            status_forcelist=[429, 500, 502, 503, 504],
-        )
-
-        # Mount adapter with retry strategy
-        adapter = HTTPAdapter(max_retries=retry_strategy)
-        session.mount("http://", adapter)
-        session.mount("https://", adapter)
-
         try:
-            response = session.get(search_url, headers=headers, timeout=15)
-            if response.status_code != 200:
-                return None
-
+            response_text = YouTubeSearcher._fetch_search_results(search_url, headers)
+            
             # Extract video data from the initialData JSON in the page source
             pattern = r'var ytInitialData = (\{.*?\});'
-            match = re.search(pattern, response.text)
+            match = re.search(pattern, response_text)
             if not match:
+                logger.warning("No ytInitialData found in response")
                 return None
 
             data = json.loads(match.group(1))
@@ -76,6 +85,7 @@ class YouTubeSearcher:
                 try:
                     contents = data['contents']['twoColumnSearchResultsRenderer']['primaryContents']['sectionListRenderer']['contents'][0]['itemSectionRenderer']['contents']
                 except KeyError:
+                    logger.warning("Could not parse video contents from response")
                     return None
 
             for item in contents:
@@ -89,24 +99,23 @@ class YouTubeSearcher:
                     title = video['title']['runs'][0]['text']
                     video_id = video.get('videoId')
 
-                    if not video_id:  # Skip if video ID is missing
+                    if not video_id:
                         continue
 
                     # Try to get duration
                     duration_text = video.get('lengthText', {}).get('simpleText', "0:00")
-                    # Convert "MM:SS" to seconds
                     parts = duration_text.split(':')
                     secs = 0
                     if len(parts) == 2:
                         try:
                             secs = int(parts[0]) * 60 + int(parts[1])
                         except ValueError:
-                            secs = 0  # Default to 0 if parsing fails
+                            secs = 0
                     elif len(parts) == 3:
                         try:
                             secs = int(parts[0]) * 3600 + int(parts[1]) * 60 + int(parts[2])
                         except ValueError:
-                            secs = 0  # Default to 0 if parsing fails
+                            secs = 0
 
                     videos.append({
                         'id': video_id,
@@ -115,26 +124,24 @@ class YouTubeSearcher:
                         'url': f"https://www.youtube.com/watch?v={video_id}"
                     })
 
-            # --- MATCHING LOGIC ---
             if not videos:
+                logger.warning("No videos found in search results")
                 return None
 
             if duration_ms:
                 target_secs = duration_ms / 1000
                 matches = []
 
-                for v in videos[:10]: # Check top 10 results
+                for v in videos[:10]:
                     diff = abs(v['duration_secs'] - target_secs)
 
-                    # Ignore extreme mismatches (mixes or snippets)
-                    if diff > 60: # More than 1 minute difference is suspicious for a single track
+                    if diff > 60:
                         continue
 
                     score = diff
-                    # Reward "Official Audio" or "Topic" in title
                     title_lower = v['title'].lower()
                     if "official audio" in title_lower or "topic" in title_lower:
-                        score *= 0.5 # Strong bias towards official versions
+                        score *= 0.5
 
                     matches.append((score, v))
 
@@ -144,22 +151,18 @@ class YouTubeSearcher:
                     best_score = matches[0][0]
 
                     if best_score > 20:
-                        if app_config.log_level.upper() == "DEBUG":
-                            print(f"Warning: Best match score is high: {best_score}")
+                        logger.debug(f"Warning: Best match score is high: {best_score}")
 
                     return best_match['url']
 
-            # Fallback to first result if no duration or no good matches
             return videos[0]['url']
 
-        except json.JSONDecodeError:
-            print("Search error: Invalid JSON response")
+        except json.JSONDecodeError as e:
+            logger.error(f"Search error: Invalid JSON response - {e}")
             return None
         except requests.exceptions.RequestException as e:
-            print(f"Search error: Network request failed - {e}")
+            logger.error(f"Search error: Network request failed - {e}")
             return None
         except Exception as e:
-            print(f"Search error: {e}")
+            logger.error(f"Search error: {e}")
             return None
-        finally:
-            session.close()  # Clean up the session

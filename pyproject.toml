@@ -8,7 +8,7 @@ version = "1.0.0"
 authors = [
   { name="Your Name", email="your.email@example.com" },
 ]
-description = "A powerful, rate-limit bypassing Spotify downloader for Desktop."
+description = "A powerful Spotify downloader for Desktop."
 readme = "README.md"
 requires-python = ">=3.8"
 classifiers = [
@@ -28,8 +28,43 @@ dependencies = [
     "imageio-ffmpeg",
 ]
 
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "pytest-mock>=3.10.0",
+    "black>=23.0.0",
+    "ruff>=0.1.0",
+    "mypy>=1.0.0",
+]
+test = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "pytest-mock>=3.10.0",
+    "responses>=0.23.0",
+]
+
 [project.urls]
-"Homepage" = "https://github.com/yourusername/Spot-Downloader_Desktop"
+Homepage = "https://github.com/yourusername/Spot-Downloader_Desktop"
 
 [project.scripts]
 spot-dl-gui = "spot_downloader.main:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = "-v --tb=short"
+
+[tool.black]
+line-length = 100
+target-version = ["py38"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py38"
+select = ["E", "F", "W", "I", "N", "UP", "B", "C4"]
+
+[tool.mypy]
+python_version = "3.8"
+warn_return_any = true
+ignore_missing_imports = true
