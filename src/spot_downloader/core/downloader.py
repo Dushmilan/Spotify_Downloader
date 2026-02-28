@@ -139,7 +139,7 @@ class SpotDownloader:
 
         def run():
             from .custom_engine import CustomDownloadEngine
-            from spotify_scraper import SpotifyClient
+            from ..utils.selenium_scraper import scrape_playlist, scrape_track, scrape_album
 
             cache_file_path = None
             engine = None
@@ -156,7 +156,6 @@ class SpotDownloader:
 
                     if "playlist" in url:
                         try:
-                            from ..utils.selenium_scraper import scrape_playlist
                             playlist_data = scrape_playlist(url, headless=True, log_callback=log_callback)
 
                             if not playlist_data:
@@ -220,8 +219,7 @@ class SpotDownloader:
 
                     elif "track" in url:
                         try:
-                            client = SpotifyClient()
-                            track_info = client.get_track_info(url)
+                            track_info = scrape_track(url, headless=True, log_callback=log_callback)
                             if track_info:
                                 artists = track_info.get('artists', [])
                                 metadata_list.append({
@@ -232,12 +230,11 @@ class SpotDownloader:
                                     'download_id': str(uuid.uuid4())
                                 })
                         except Exception as e:
-                            handle_download_error(e, log_callback, "Fetching track from Spotify")
+                            handle_download_error(e, log_callback, "Scraping track with Selenium")
 
                     elif "album" in url:
                         try:
-                            client = SpotifyClient()
-                            album_info = client.get_album_info(url)
+                            album_info = scrape_album(url, headless=True, log_callback=log_callback)
                             if album_info:
                                 album_name = album_info.get('name', 'Unknown Album')
                                 tracks_data = album_info.get('tracks', album_info.get('items', []))
@@ -257,7 +254,7 @@ class SpotDownloader:
                                         'download_id': str(uuid.uuid4())
                                     })
                         except Exception as e:
-                            handle_download_error(e, log_callback, "Fetching album from Spotify")
+                            handle_download_error(e, log_callback, "Scraping album with Selenium")
                 else:
                     metadata_list.append({'name': url, 'artist': '', 'download_id': str(uuid.uuid4())})
 

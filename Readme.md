@@ -1,17 +1,16 @@
 # Spot-Downloader Desktop
 
-A modern, secure GUI-based application for downloading Spotify songs and playlists, powered by `spotdl`.
+A modern, secure GUI-based application for downloading Spotify songs and playlists, built with `CustomTkinter` and powered by `yt-dlp`.
 
 ## Features
 - ✨ Modern, sleek GUI using `CustomTkinter`.
 - 🔒 Enhanced security with URL validation and file sanitization.
-- 🎵 Download single songs or entire playlists.
+- 🎵 Download single songs or entire playlists via Selenium scraping.
 - 📂 Automatic file organization with configurable paths.
 - 🚀 Multi-threaded downloads to keep the UI responsive.
 - ⚙️ Configurable settings for download quality, format, and concurrency.
-- 🛡️ Safe mode with extra security validations.
 - 📊 Improved progress tracking and logging.
-- 🛠️ Better error handling and resilience.
+- 🛠️ Better error handling and fuzzy metadata matching.
 
 ## Prerequisites
 - **Python 3.8+**
@@ -24,8 +23,6 @@ A modern, secure GUI-based application for downloading Spotify songs and playlis
    ```
 
    That's it! FFmpeg is automatically installed via the `imageio-ffmpeg` package - no manual setup required.
-
-   > **Note**: The application uses `spotifyscraper` which installs as the `spotify_scraper` module. This provides the SpotifyClient class needed to fetch real Spotify data.
 
 ## Usage
 Run the application using:
@@ -77,17 +74,12 @@ The application follows a service-oriented architecture:
 
 If you encounter issues:
 
-1. **ModuleNotFoundError: No module named 'spotify_scraper'**: Make sure you've installed `spotifyscraper`:
-   ```bash
-   pip install spotifyscraper
-   ```
-
-2. **FFmpeg not found**: The app automatically uses bundled FFmpeg via `imageio-ffmpeg`. If you still see this error, try:
+1. **FFmpeg not found**: The app automatically uses bundled FFmpeg via `imageio-ffmpeg`. If you still see this error, try:
    ```bash
    pip install imageio-ffmpeg
    ```
    Alternatively, you can install FFmpeg manually and add it to your system PATH.
 
-3. **Spotify anti-bot measures**: The application may occasionally be blocked by Spotify. Try reducing the number of concurrent downloads in the configuration.
+2. **Spotify anti-bot measures**: The application uses Selenium to scrape metadata. If blocked, try reducing the number of concurrent downloads.
 
-4. **Permission errors**: Make sure the download directory is writable.
+3. **Permission errors**: Make sure the download directory is writable.

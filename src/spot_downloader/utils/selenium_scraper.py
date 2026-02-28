@@ -252,6 +252,106 @@ def harvest_rows(driver, tracks_by_rownum, seen_title_artists):
     return added
 
 
+def scrape_track(track_url, headless=True, log_callback=None):
+    def log(msg):
+        if log_callback:
+            log_callback(msg)
+
+    driver = setup_driver(headless=headless)
+    if not driver:
+        return None
+
+    try:
+        log(f"Navigating to track: {track_url}...")
+        driver.get(track_url)
+        WebDriverWait(driver, 15).until(EC.presence_of_element_located((By.TAG_NAME, "main")))
+        handle_cookie_consent(driver)
+
+        # Let it stabilize
+        time.sleep(2)
+
+        title = driver.execute_script("""
+            let h1 = document.querySelector('h1[data-testid="entityTitle"]');
+            return h1 ? h1.innerText.trim() : document.title.split(' - ')[0];
+        """)
+        
+        artists = driver.execute_script("""
+            let artists = Array.from(document.querySelectorAll('a[href*="/artist/"]')).map(a => a.innerText.trim());
+            return [...new Set(artists)].filter(a => a.length > 0);
+        """)
+
+        album = driver.execute_script("""
+            let album = document.querySelector('a[href*="/album/"]');
+            return album ? album.innerText.trim() : "Unknown Album";
+        """)
+
+        duration_str = driver.execute_script("""
+            let dur = document.querySelector('div[data-testid="track-duration"]');
+            return dur ? dur.innerText.trim() : "";
+        """)
+        duration_ms = duration_to_ms(duration_str)
+
+        log(f"Scraped track: {title} by {', '.join(artists) if artists else 'Unknown Artist'}")
+        
+        return {
+            'name': title,
+            'artists': [{'name': a} for a in artists] if artists else [{'name': 'Unknown Artist'}],
+            'album': {'name': album},
+            'duration_ms': duration_ms
+        }
+
+    except Exception as e:
+        log(f"Track scraping error: {e}")
+        return None
+    finally:
+        driver.quit()
+
+
+def scrape_album(album_url, headless=True, log_callback=None):
+    def log(msg):
+        if log_callback:
+            log_callback(msg)
+
+    driver = setup_driver(headless=headless)
+    if not driver:
+        return None
+
+    try:
+        log(f"Navigating to album: {album_url}...")
+        driver.get(album_url)
+        WebDriverWait(driver, 15).until(EC.presence_of_element_located((By.TAG_NAME, "main")))
+        handle_cookie_consent(driver)
+
+        # Albums are similar to playlists in row structure
+        time.sleep(2)
+        
+        album_name = get_playlist_name(driver, log)
+        
+        # Use existing row harvesting logic
+        tracks_by_rownum = {}
+        seen_title_artists = set()
+        harvest_rows(driver, tracks_by_rownum, seen_title_artists)
+        
+        # Albums don't usually scroll as much as playlists but let's do a basic scroll
+        driver.execute_script("window.scrollTo(0, document.body.scrollHeight/2);")
+        time.sleep(1)
+        harvest_rows(driver, tracks_by_rownum, seen_title_artists)
+        
+        all_tracks = [tracks_by_rownum[k] for k in sorted(tracks_by_rownum.keys())]
+        log(f"Scraped album '{album_name}' with {len(all_tracks)} tracks.")
+
+        return {
+            'name': album_name,
+            'tracks': {'items': all_tracks},
+        }
+
+    except Exception as e:
+        log(f"Album scraping error: {e}")
+        return None
+    finally:
+        driver.quit()
+
+
 @rate_limit(calls=5, period=60)  # 5 playlists per minute to avoid Spotify bans
 def scrape_playlist(playlist_url, headless=True, log_callback=None):
     def log(msg):

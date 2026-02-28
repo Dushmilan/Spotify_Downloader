@@ -18,10 +18,8 @@ classifiers = [
 ]
 dependencies = [
     "customtkinter",
-    "spotdl",
     "yt-dlp",
     "mutagen",
-    "spotifyscraper",
     "requests",
     "pillow",
     "urllib3",
