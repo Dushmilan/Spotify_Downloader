@@ -3,8 +3,10 @@ import re
 import urllib.parse
 import json
 import time
+from typing import Optional, List, Dict, Any
 from urllib3.util.retry import Retry
 from requests.adapters import HTTPAdapter
+from rapidfuzz import fuzz
 from ..config import app_config
 from ..utils.logger import get_logger
 from ..utils.rate_limiter import rate_limit
@@ -13,9 +15,9 @@ from ..utils.retry import retry
 logger = get_logger(__name__)
 
 # Shared session for connection pooling
-_search_session = None
+_search_session: Optional[requests.Session] = None
 
-def _get_search_session():
+def _get_search_session() -> requests.Session:
     """Get or create shared search session with retry configuration."""
     global _search_session
     if _search_session is None:
@@ -34,7 +36,7 @@ class YouTubeSearcher:
     @staticmethod
     @rate_limit(calls=10, period=60)  # 10 calls per minute to avoid YouTube bans
     @retry(max_attempts=3, delay=1.0, backoff=2.0, exceptions=(requests.RequestException,))
-    def _fetch_search_results(search_url, headers):
+    def _fetch_search_results(search_url: str, headers: Dict[str, str]) -> str:
         """Fetch search results with retry logic."""
         session = _get_search_session()
         response = session.get(search_url, headers=headers, timeout=15)
@@ -42,10 +44,10 @@ class YouTubeSearcher:
         return response.text
 
     @staticmethod
-    def search_ytm(query, duration_ms=None):
+    def search_ytm(query: str, duration_ms: Optional[int] = None, artist: Optional[str] = None) -> Optional[str]:
         """
         Searches YouTube Music for the best matching audio track.
-        Prioritizes 'Official Audio' and matches duration.
+        Prioritizes 'Official Audio' and matches duration/artist fuzzy.
         """
         # Validate input
         if not query or not isinstance(query, str):
@@ -59,7 +61,7 @@ class YouTubeSearcher:
         logger.debug(f"Searching YTM for: {query}")
 
         # We use a specific search query to target YTM 'songs' category
-        search_query = f"{query} official audio"
+        search_query = f"{query} {artist if artist else ''} official audio"
         encoded_query = urllib.parse.quote(search_query)
 
         search_url = f"https://www.youtube.com/results?search_query={encoded_query}"
@@ -130,32 +132,40 @@ class YouTubeSearcher:
                 logger.warning("No videos found in search results")
                 return None
 
-            if duration_ms:
-                target_secs = duration_ms / 1000
-                matches = []
-
-                for v in videos[:10]:
+            # Improved Fuzzy Scorer
+            scored_videos = []
+            target_secs = (duration_ms / 1000) if duration_ms else None
+            
+            for v in videos[:8]:
+                # 1. Duration Score (Penalty for large mismatch)
+                duration_penalty = 0
+                if target_secs:
                     diff = abs(v['duration_secs'] - target_secs)
+                    if diff > 10: duration_penalty = diff * 2 # Weight duration difference
+                
+                # 2. Title Match Score (Fuzzy)
+                title_score = fuzz.token_sort_ratio(query, v['title'])
+                
+                # 3. Artist Match Score (Fuzzy)
+                artist_score = 0
+                if artist:
+                    artist_score = fuzz.partial_ratio(artist.lower(), v['title'].lower())
+                
+                # 4. Keyword Bonuses
+                keyword_bonus = 0
+                title_lower = v['title'].lower()
+                if "official audio" in title_lower: keyword_bonus += 15
+                if "official music video" in title_lower: keyword_bonus += 5
+                if "topic" in title_lower: keyword_bonus += 10
+                
+                final_score = title_score + (artist_score * 0.5) + keyword_bonus - duration_penalty
+                scored_videos.append((final_score, v))
 
-                    if diff > 60:
-                        continue
-
-                    score = diff
-                    title_lower = v['title'].lower()
-                    if "official audio" in title_lower or "topic" in title_lower:
-                        score *= 0.5
-
-                    matches.append((score, v))
-
-                if matches:
-                    matches.sort(key=lambda x: x[0])
-                    best_match = matches[0][1]
-                    best_score = matches[0][0]
-
-                    if best_score > 20:
-                        logger.debug(f"Warning: Best match score is high: {best_score}")
-
-                    return best_match['url']
+            if scored_videos:
+                scored_videos.sort(key=lambda x: x[0], reverse=True)
+                best_match = scored_videos[0][1]
+                logger.debug(f"Best fuzzy match score: {scored_videos[0][0]} for {best_match['title']}")
+                return best_match['url']
 
             return videos[0]['url']
 

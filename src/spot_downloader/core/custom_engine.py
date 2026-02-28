@@ -1,9 +1,11 @@
 import os
+from typing import Optional, Callable, Any, Dict
 import yt_dlp
 from .searcher import YouTubeSearcher
 from ..utils.tagger import tag_mp3, tag_m4a
 from ..utils.validation import sanitize_filename
 from ..utils.logger import get_logger
+from ..utils.retry import retry
 
 logger = get_logger(__name__)
 from ..config import app_config
@@ -11,12 +13,18 @@ from ..utils.throttle import Throttler
 from ..utils.helpers import get_ffmpeg_path
 
 class CustomDownloadEngine:
-    def __init__(self, download_path="downloads"):
+    def __init__(self, download_path: str = "downloads"):
         self.default_path = download_path
         if not os.path.exists(self.default_path):
             os.makedirs(self.default_path)
 
-    def download_and_tag(self, metadata, progress_callback=None, log_callback=None):
+    @retry(max_attempts=3, delay=2.0, exceptions=(yt_dlp.utils.DownloadError, ConnectionError))
+    def download_and_tag(
+        self, 
+        metadata: Dict[str, Any], 
+        progress_callback: Optional[Callable[[float], None]] = None, 
+        log_callback: Optional[Callable[[str], None]] = None
+    ) -> bool:
         """
         Full pipeline: Search -> Download -> Tag
         """
@@ -56,7 +64,11 @@ class CustomDownloadEngine:
 
         # 1. Search for best match
         try:
-            video_url = YouTubeSearcher.search_ytm(query, duration_ms=metadata.get('duration_ms'))
+            video_url = YouTubeSearcher.search_ytm(
+                query, 
+                duration_ms=metadata.get('duration_ms'),
+                artist=artist_name
+            )
             if not video_url:
                 if log_callback:
                     log_callback("Error: No match found on YouTube Music.")
@@ -70,12 +82,11 @@ class CustomDownloadEngine:
             log_callback(f"Downloading from: {video_url}")
 
         # 2. Download using yt-dlp
-        # file_name is already defined and sanitized above
         output_path = os.path.join(target_path, f"{file_name}.%(ext)s")
 
         progress_throttler = Throttler(0.1)  # Throttle progress updates to every 100ms
 
-        def ydl_progress_hook(d):
+        def ydl_progress_hook(d: Dict[str, Any]):
             if d['status'] == 'downloading':
                 # Log size in MB
                 total_bytes = d.get('total_bytes') or d.get('total_bytes_estimate', 0)
@@ -84,7 +95,7 @@ class CustomDownloadEngine:
                 if total_bytes > 0:
                     mb_total = total_bytes / (1024 * 1024)
                     mb_downloaded = downloaded_bytes / (1024 * 1024)
-                    if log_callback and downloaded_bytes % (1024 * 1024) < 100000: # Throttle logs to roughly every 1MB
+                    if log_callback and downloaded_bytes % (2 * 1024 * 1024) < 100000: # Throttle logs to roughly every 2MB
                         log_callback(f"Download Progress: {mb_downloaded:.2f}MB / {mb_total:.2f}MB")
 
                 if progress_callback:
@@ -96,7 +107,6 @@ class CustomDownloadEngine:
                         pass
             elif d['status'] == 'finished':
                 if log_callback:
-                    # Final size log
                     final_bytes = d.get('total_bytes') or d.get('downloaded_bytes', 0)
                     mb_final = final_bytes / (1024 * 1024)
                     log_callback(f"Download complete ({mb_final:.2f}MB), post-processing...")
@@ -109,7 +119,7 @@ class CustomDownloadEngine:
         }
         preferred_quality = quality_map.get(app_config.download_quality, '320')
 
-        # Get FFmpeg location (system or bundled via imageio-ffmpeg)
+        # Get FFmpeg location
         ffmpeg_exe = get_ffmpeg_path()
 
         ydl_opts = {
@@ -117,20 +127,18 @@ class CustomDownloadEngine:
             'outtmpl': output_path,
             'postprocessors': [{
                 'key': 'FFmpegExtractAudio',
-                'preferredcodec': app_config.file_format, # Corrected attribute access
+                'preferredcodec': app_config.file_format,
                 'preferredquality': preferred_quality,
             }],
-            # Using '0' for audio-quality ensures the best VBR/CBR encoding
             'audio_quality': 0,
             'progress_hooks': [ydl_progress_hook],
             'quiet': True,
             'no_warnings': True,
-            'socket_timeout': app_config.timeout_seconds,  # Timeout for network operations from config
-            'connect_timeout': app_config.timeout_seconds,  # Connection timeout from config
-            'retries': app_config.retry_attempts,  # Number of retries for failed downloads from config
+            'socket_timeout': app_config.timeout_seconds,
+            'connect_timeout': app_config.timeout_seconds,
+            'retries': app_config.retry_attempts,
         }
 
-        # Set FFmpeg location if using bundled version
         if ffmpeg_exe:
             ydl_opts['ffmpeg_location'] = os.path.dirname(ffmpeg_exe)
 
@@ -149,17 +157,13 @@ class CustomDownloadEngine:
                     log_callback(f"Successfully downloaded and tagged: {file_name}")
                 return True
             else:
-                logger.error("Downloaded file not found after conversion.")
-            if log_callback:
-                log_callback("Error: Downloaded file not found after conversion.")
+                logger.error(f"Downloaded file not found after conversion: {final_file}")
+                if log_callback:
+                    log_callback("Error: Downloaded file not found after conversion.")
                 return False
 
-        except yt_dlp.DownloadError as e:
-            logger.error(f"Download error (yt-dlp): {str(e)}")
-            if log_callback:
-                log_callback(f"Download error (yt-dlp): {str(e)}"),
-            return False
         except Exception as e:
+            logger.error(f"Unexpected download error: {str(e)}")
             if log_callback:
                 log_callback(f"Unexpected download error: {str(e)}")
             return False

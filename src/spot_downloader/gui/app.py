@@ -184,8 +184,19 @@ class App(ctk.CTk):
         title = ctk.CTkLabel(top_bar, text="Active Downloads", font=Styles.SUBHEADER_FONT)
         title.grid(row=0, column=0, sticky="w")
 
+        self.cancel_all_btn = ctk.CTkButton(
+            top_bar, 
+            text="Cancel All", 
+            width=100, 
+            height=28, 
+            fg_color=Styles.BG_DARK, 
+            hover_color=Styles.ERROR,
+            command=self.cancel_all_downloads
+        )
+        self.cancel_all_btn.grid(row=0, column=1, padx=10, sticky="e")
+
         self.overall_stat_lbl = ctk.CTkLabel(top_bar, text="0 files active", font=Styles.BODY_BOLD, text_color=Styles.ACCENT_GREEN)
-        self.overall_stat_lbl.grid(row=0, column=1, sticky="e")
+        self.overall_stat_lbl.grid(row=0, column=2, sticky="e")
 
         # Scrollable area for cards
         self.downloads_scroll = ctk.CTkScrollableFrame(
@@ -362,6 +373,21 @@ class App(ctk.CTk):
 
         threading.Thread(target=run_dl, daemon=True).start()
 
+    def cancel_all_downloads(self):
+        if messagebox.askyesno("Cancel All", "Are you sure you want to stop all active downloads?"):
+            self.download_service.downloader.cancel_all()
+            self.log("Stopping all active downloads...")
+
+    def open_download_folder(self):
+        path = app_config.download_path
+        if os.path.exists(path):
+            if os.name == 'nt':
+                os.startfile(path)
+            elif os.name == 'posix':
+                subprocess.call(['open' if sys.platform == 'darwin' else 'xdg-open', path])
+        else:
+            messagebox.showerror("Error", f"Folder not found: {path}")
+
     def reset_ui(self):
         self.download_btn.configure(state="normal", text="START DOWNLOAD")
         self.url_entry.configure(state="normal")
@@ -391,7 +417,7 @@ class App(ctk.CTk):
         card.grid(row=len(self.current_downloads), column=0, sticky="ew", padx=10, pady=5)
         card.grid_columnconfigure(1, weight=1)
 
-        # Icon placeholder (or could be album art later)
+        # Icon placeholder
         icon_frame = ctk.CTkFrame(card, width=50, height=50, corner_radius=6, fg_color=Styles.BG_DARK)
         icon_frame.grid(row=0, column=0, padx=15, pady=15)
         icon_lbl = ctk.CTkLabel(icon_frame, text="♪", font=("Arial", 20), text_color=Styles.ACCENT_GREEN)
@@ -410,12 +436,29 @@ class App(ctk.CTk):
         pbar.grid(row=0, column=2, padx=20)
         pbar.set(0)
 
-        status_lbl = ctk.CTkLabel(card, text="Waiting", font=Styles.SMALL_LABEL_FONT, text_color=Styles.TEXT_DIM, width=70)
-        status_lbl.grid(row=0, column=3, padx=(0, 20))
+        # Action Buttons Container
+        actions_frame = ctk.CTkFrame(card, fg_color="transparent")
+        actions_frame.grid(row=0, column=3, padx=(0, 20))
+
+        status_lbl = ctk.CTkLabel(actions_frame, text="Waiting", font=Styles.SMALL_LABEL_FONT, text_color=Styles.TEXT_DIM, width=70)
+        status_lbl.pack(side="left", padx=5)
+
+        folder_btn = ctk.CTkButton(
+            actions_frame, 
+            text="📁", 
+            width=30, 
+            height=30, 
+            fg_color="transparent", 
+            hover_color=Styles.BG_DARK,
+            command=self.open_download_folder
+        )
+        folder_btn.pack(side="left", padx=2)
+        folder_btn.configure(state="disabled") # Only enable when finished
 
         self.current_downloads[d.id] = {
             "pbar": pbar,
             "status": status_lbl,
+            "folder_btn": folder_btn,
             "card": card
         }
 
@@ -426,6 +469,7 @@ class App(ctk.CTk):
         if d.status == DownloadStatus.COMPLETED:
             ui["status"].configure(text="Success", text_color=Styles.SUCCESS)
             ui["pbar"].set(1.0)
+            ui["folder_btn"].configure(state="normal")
         elif d.status == DownloadStatus.FAILED:
             ui["status"].configure(text="Failed", text_color=Styles.ERROR)
         elif d.status == DownloadStatus.DOWNLOADING:
