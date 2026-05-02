@@ -7,5 +7,6 @@
   "log_level": "INFO",
   "retry_attempts": 3,
   "timeout_seconds": 30,
-  "safe_mode": true
+  "safe_mode": true,
+  "scraper_engine": "Playwright"
 }

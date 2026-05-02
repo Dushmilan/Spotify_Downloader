@@ -65,11 +65,9 @@ class PlaywrightScraper(Scraper):
                 await page.goto(url, wait_until="domcontentloaded", timeout=30000)
                 await self._handle_cookie_consent(page)
                 
-                # Wait for main content
                 await page.wait_for_selector('main', timeout=15000)
-                await asyncio.sleep(2) # Stabilize
+                await asyncio.sleep(2)
 
-                # Extract metadata using evaluate
                 metadata = await page.evaluate("""() => {
                     let name = "";
                     let h1 = document.querySelector('h1[data-testid="entityTitle"]');
@@ -190,42 +188,16 @@ class PlaywrightScraper(Scraper):
     def scrape_album(self, url: str, headless: bool = True, log_callback: Optional[Callable[[str], None]] = None) -> Optional[Dict[str, Any]]:
         return asyncio.run(self.scrape_album_async(url, headless, log_callback))
 
-    async def _harvest_playlist_rows(self, page):
-        return await page.evaluate("""() => {
-            let rows = Array.from(document.querySelectorAll('[data-testid="tracklist-row"]'));
-            return rows.map(row => {
-                let row_num = row.getAttribute('aria-rowindex');
-                
-                let title = "";
-                let a = row.querySelector('a[data-testid]');
-                if (a) title = a.getAttribute('title') || a.innerText.trim();
-                else {
-                    let innerA = row.querySelector('a');
-                    if (innerA) title = innerA.innerText.trim();
-                }
-
-                let artist_links = Array.from(row.querySelectorAll('a[href*="/artist/"]'));
-                let artists = artist_links.map(a => a.innerText.trim());
-
-                let album_link = row.querySelector('a[href*="/album/"]');
-                let album = album_link ? (album_link.getAttribute('title') || album_link.innerText.trim()) : "Unknown Album";
-
-                let duration_elem = row.querySelector('div[data-testid*="duration"]');
-                let duration_str = duration_elem ? duration_elem.innerText.trim() : "";
-
-                return { 
-                    row_num: row_num ? parseInt(row_num) : null,
-                    name: title, 
-                    artists, 
-                    album, 
-                    duration_str 
-                };
-            }).filter(t => t.name.length > 0);
-        }""")
-
     async def scrape_playlist_async(self, url: str, headless: bool = True, log_callback: Optional[Callable[[str], None]] = None) -> Optional[Dict[str, Any]]:
         def log(msg):
             if log_callback: log_callback(msg)
+
+        # 1. Extract Playlist ID from URL immediately
+        playlist_id_match = re.search(r"/playlist/([^/?#]+)", url)
+        if not playlist_id_match:
+            log("Error: Invalid Spotify playlist URL.")
+            return None
+        playlist_id = playlist_id_match.group(1)
 
         try:
             from playwright.async_api import async_playwright
@@ -234,71 +206,120 @@ class PlaywrightScraper(Scraper):
             return None
 
         async with async_playwright() as p:
-            browser = await p.chromium.launch(headless=headless)
-            context = await browser.new_context(user_agent=self.user_agent, viewport={'width': 1920, 'height': 1080})
+            browser = await p.chromium.launch(headless=headless, args=["--disable-blink-features=AutomationControlled"])
+            context = await browser.new_context(user_agent=self.user_agent)
             page = await context.new_page()
 
+            auth_token = None
+            api_headers = {}
+            captured_event = asyncio.Event()
+
+            async def handle_request(request):
+                nonlocal auth_token, api_headers
+                try:
+                    r_url = request.url
+                    # Capture headers from ANY Spotify API call
+                    if "api.spotify.com" in r_url and "authorization" in request.headers:
+                        headers = request.headers
+                        auth = headers['authorization']
+                        if auth.startswith('Bearer '):
+                            auth_token = auth
+                            # Replicate critical headers to look authentic and avoid 429/403
+                            api_headers = {
+                                'Authorization': auth,
+                                'Accept': headers.get('accept', '*/*'),
+                                'App-Platform': headers.get('app-platform', 'WebPlayer'),
+                                'Spotify-App-Version': headers.get('spotify-app-version', ''),
+                                'Client-Token': headers.get('client-token', '')
+                            }
+                            captured_event.set()
+                except:
+                    pass
+
+            page.on("request", handle_request)
+
             try:
-                log(f"Navigating to playlist: {url}...")
-                await page.goto(url, wait_until="domcontentloaded", timeout=30000)
-                await self._handle_cookie_consent(page)
+                log(f"Loading playlist page to capture access token...")
+                await page.goto(url, wait_until="commit", timeout=60000)
                 
-                await page.wait_for_selector('main', timeout=15000)
-                await asyncio.sleep(2)
+                try:
+                    await asyncio.wait_for(captured_event.wait(), timeout=20.0)
+                except asyncio.TimeoutError:
+                    log("Waiting for auth token... (scrolling to trigger)")
+                    await page.mouse.wheel(0, 2000)
+                    try:
+                        await asyncio.wait_for(captured_event.wait(), timeout=15.0)
+                    except asyncio.TimeoutError:
+                        log("Error: API token interception timed out.")
+                        return None
 
-                playlist_name = await page.evaluate("""() => {
-                    let h1 = document.querySelector('h1[data-testid="entityTitle"]');
-                    return h1 ? h1.innerText.trim() : document.title.split(' - ')[0];
-                }""")
-
-                log(f"Collecting tracks from '{playlist_name}'...")
-
-                tracks_by_rownum = {}
-                max_no_new = 10
-                no_new_count = 0
+                log("Access token captured. Retrieving playlist metadata...")
                 
-                for i in range(100): # Max 100 scroll steps
-                    rows = await self._harvest_playlist_rows(page)
-                    new_found = False
-                    for r in rows:
-                        key = r['row_num'] if r['row_num'] is not None else (100000 + len(tracks_by_rownum))
-                        if key not in tracks_by_rownum:
-                            tracks_by_rownum[key] = r
-                            new_found = True
-                    
-                    if new_found:
-                        no_new_count = 0
-                        log(f"Collected {len(tracks_by_rownum)} tracks...")
-                    else:
-                        no_new_count += 1
-                        if no_new_count >= max_no_new:
-                            break
-
-                    await page.keyboard.press("PageDown")
-                    await asyncio.sleep(0.5)
+                # Fetch playlist metadata via API for the real name
+                meta_url = f"https://api.spotify.com/v1/playlists/{playlist_id}?fields=name"
+                playlist_name = "Playlist"
+                
+                meta_data = await page.evaluate(f"""async (args) => {{
+                    try {{
+                        const res = await fetch(args.url, {{ headers: args.headers }});
+                        return res.ok ? await res.json() : {{ error: res.status }};
+                    }} catch (e) {{
+                        return {{ error: e.message }};
+                    }}
+                }}""", {"url": meta_url, "headers": api_headers})
+                
+                if not meta_data.get('error'):
+                    playlist_name = meta_data.get('name', playlist_name)
 
                 all_tracks = []
-                # Sort by row number and clean up
-                for key in sorted(tracks_by_rownum.keys()):
-                    t = tracks_by_rownum[key]
-                    all_tracks.append({
-                        'track': {
-                            'name': t['name'],
-                            'artists': [{'name': a} for a in t['artists']] if t['artists'] else [{'name': 'Unknown Artist'}],
-                            'duration_ms': self._duration_to_ms(t['duration_str']),
-                            'album': {'name': t['album']}
-                        }
-                    })
+                next_url = f"https://api.spotify.com/v1/playlists/{playlist_id}/tracks?offset=0&limit=50&market=from_token"
+
+                while next_url:
+                    max_retries = 3
+                    data = None
+                    
+                    for attempt in range(max_retries):
+                        data = await page.evaluate(f"""async (args) => {{
+                            try {{
+                                const res = await fetch(args.url, {{ headers: args.headers }});
+                                if (res.status === 429) return {{ error: 429, retryAfter: res.headers.get('Retry-After') }};
+                                if (!res.ok) return {{ error: res.status }};
+                                return await res.json();
+                            }} catch (e) {{
+                                return {{ error: e.message }};
+                            }}
+                        }}""", {"url": next_url, "headers": api_headers})
+
+                        if data.get('error') == 429:
+                            wait_time = int(data.get('retryAfter') or (attempt + 1) * 5)
+                            log(f"Rate limited (429). Waiting {wait_time}s before retry...")
+                            await asyncio.sleep(wait_time)
+                            continue
+                        break
+
+                    if "error" in data:
+                        log(f"API Fetch Error: {data['error']}. Stopping.")
+                        break
+
+                    items = data.get('items', [])
+                    all_tracks.extend(items)
+                    next_url = data.get('next')
+                    
+                    total = data.get('total', '???')
+                    log(f"Fetched {len(all_tracks)} / {total} tracks...")
+                    
+                    if not items or not next_url: break
+                    await asyncio.sleep(0.5)
 
                 log(f"Successfully scraped {len(all_tracks)} tracks from '{playlist_name}'.")
-
+                
                 return {
                     'name': playlist_name,
                     'tracks': {'items': all_tracks},
                 }
 
             except Exception as e:
-                log(f"Playlist scraping error (Playwright): {e}")
+                log(f"Playlist scraping error: {e}")
                 return None
             finally:
                 await browser.close()

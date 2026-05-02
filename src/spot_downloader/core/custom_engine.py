@@ -137,6 +137,22 @@ class CustomDownloadEngine:
             'socket_timeout': app_config.timeout_seconds,
             'connect_timeout': app_config.timeout_seconds,
             'retries': app_config.retry_attempts,
+            'nocheckcertificate': True,
+            'geo_bypass': True,
+            'extractor_args': {
+                'youtube': {
+                    'player_client': ['android', 'web'],
+                    'skip': ['dash', 'hls']
+                }
+            },
+            'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+            'referer': 'https://www.youtube.com/',
+            'http_headers': {
+                'Accept': '*/*',
+                'Accept-Language': 'en-US,en;q=0.9',
+                'Origin': 'https://www.youtube.com',
+                'Sec-Fetch-Mode': 'navigate',
+            }
         }
 
         if ffmpeg_exe:

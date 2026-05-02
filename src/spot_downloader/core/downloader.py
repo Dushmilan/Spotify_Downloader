@@ -200,12 +200,23 @@ class SpotDownloader:
 
                         for item in tracks:
                             if self._cancelled: break
-                            track_data = item.get('track', item) if isinstance(item, dict) else item
-                            if not isinstance(track_data, dict): continue
+                            
+                            # Handle both direct track objects and Spotify API wrapped objects
+                            track_data = item.get('track') if (isinstance(item, dict) and 'track' in item) else item
+                            
+                            if not isinstance(track_data, dict) or not track_data:
+                                continue
 
                             song_name = track_data.get('name', 'Unknown Track')
                             artists = track_data.get('artists', [])
-                            artist_name = artists[0].get('name', 'Unknown Artist') if artists and isinstance(artists[0], dict) else 'Unknown Artist'
+                            
+                            # Handle different artist formats (list of strings vs list of dicts)
+                            if artists and isinstance(artists[0], dict):
+                                artist_name = artists[0].get('name', 'Unknown Artist')
+                            elif artists and isinstance(artists[0], str):
+                                artist_name = artists[0]
+                            else:
+                                artist_name = 'Unknown Artist'
 
                             file_name = sanitize_filename(f"{song_name} - {artist_name}")
                             expected_path = os.path.join(playlist_folder, f"{file_name or 'track'}.mp3")
@@ -217,7 +228,7 @@ class SpotDownloader:
                                 'name': song_name,
                                 'artist': artist_name,
                                 'duration_ms': track_data.get('duration_ms'),
-                                'album': track_data.get('album', {}).get('name', ''),
+                                'album': track_data.get('album', {}).get('name', '') if isinstance(track_data.get('album'), dict) else '',
                                 'output_dir': playlist_folder,
                                 'playlist_name': playlist_name,
                                 'download_id': str(uuid.uuid4())

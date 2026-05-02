@@ -51,15 +51,19 @@ class DownloadService:
         Initiate a download operation.
 
         Args:
-            url: The URL to download from
+            url: The URL or search query to download from
             progress_callback: Callback for progress updates
             log_callback: Callback for log messages
             tracker_callback: Callback for tracker updates
         """
-        # Validate URL if safe mode is enabled
-        if app_config.safe_mode and not validate_spotify_url(url):
+        if not url:
+            return None
+
+        # Basic security check for all inputs
+        from ..utils.validation import is_safe_url
+        if "://" in url and not is_safe_url(url):
             if log_callback:
-                log_callback("Invalid Spotify URL. Please enter a valid Spotify track, playlist, or album URL.")
+                log_callback("Error: Unsafe or unsupported URL provided.")
             return None
 
         # Pass the tracker to the downloader so it can update progress

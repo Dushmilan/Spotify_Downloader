@@ -339,14 +339,17 @@ class App(ctk.CTk):
     # --- Logic ---
 
     def log(self, msg):
-        self.log_box.configure(state="normal")
-        self.log_box.insert("end", f"[{threading.current_thread().name}] {msg}\n")
-        self.log_box.see("end")
-        self.log_box.configure(state="disabled")
-        
-        # Update status pill if it's a short message
-        if len(msg) < 50:
-            self.status_text.configure(text=msg)
+        thread_name = threading.current_thread().name
+        def update_ui():
+            self.log_box.configure(state="normal")
+            self.log_box.insert("end", f"[{thread_name}] {msg}\n")
+            self.log_box.see("end")
+            self.log_box.configure(state="disabled")
+            
+            if len(msg) < 50:
+                self.status_text.configure(text=msg)
+
+        self.after(0, update_ui)
 
     def load_settings(self):
         self.path_display.configure(text=os.path.basename(app_config.download_path))
@@ -384,9 +387,13 @@ class App(ctk.CTk):
 
         def run_dl():
             try:
-                self.download_service.download(url, log_callback=self.log)
+                thread = self.download_service.download(url, log_callback=self.log)
+                if thread:
+                    thread.join() # Wait for the downloader thread (scraping + downloading)
+                else:
+                    self.log("Download could not be started. Check your URL.")
             except Exception as e:
-                self.log(f"Error: {e}")
+                self.log(f"Critical Error: {e}")
             finally:
                 self.after(0, self.reset_ui)
 
@@ -413,7 +420,14 @@ class App(ctk.CTk):
         self.url_entry.delete(0, 'end')
 
     def on_tracker_change(self):
-        self.after(0, self.update_queue_ui)
+        # Use a timer to throttle updates
+        if not hasattr(self, "_update_scheduled") or not self._update_scheduled:
+            self._update_scheduled = True
+            self.after(100, self._throttled_update)
+
+    def _throttled_update(self):
+        self._update_scheduled = False
+        self.update_queue_ui()
 
     def update_queue_ui(self):
         tracker = self.download_service.tracker
