@@ -14,8 +14,27 @@ class DownloadService:
     """Service class to handle download operations."""
 
     def __init__(self):
+        self._current_scraper_name = app_config.get("scraper_engine", "Selenium")
         self.downloader = SpotDownloader()
         self._tracker = DownloadTracker()
+        
+        # Apply the initial scraper selection
+        self.set_scraper(self._current_scraper_name)
+
+    def set_scraper(self, name: str):
+        """Set the scraper implementation by name."""
+        if name == "Selenium":
+            from ..utils.selenium_scraper import SeleniumScraper
+            self.downloader.scraper = SeleniumScraper()
+            self._current_scraper_name = "Selenium"
+        elif name == "Playwright":
+            from ..utils.playwright_scraper import PlaywrightScraper
+            self.downloader.scraper = PlaywrightScraper()
+            self._current_scraper_name = "Playwright"
+
+    @property
+    def scraper_name(self):
+        return self._current_scraper_name
 
     @property
     def tracker(self):

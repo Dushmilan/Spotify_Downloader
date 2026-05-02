@@ -10,6 +10,7 @@ import concurrent.futures
 import json
 import uuid
 from typing import Optional, Callable, List, Dict, Any, Union
+from .interfaces import Scraper
 from ..utils.validation import validate_spotify_url, sanitize_filename, validate_download_path, is_safe_url
 from ..utils.error_handling import handle_download_error, DownloadError, DownloadErrorType, ProcessingError
 from ..utils.logger import get_logger
@@ -23,7 +24,7 @@ logger = get_logger(__name__)
 class SpotDownloader:
     """Main downloader class for handling Spotify downloads."""
 
-    def __init__(self, download_path: Optional[str] = None):
+    def __init__(self, download_path: Optional[str] = None, scraper: Optional[Scraper] = None):
         if download_path is None:
             download_path = app_config.download_path
 
@@ -36,6 +37,12 @@ class SpotDownloader:
             os.makedirs(self.download_path)
             
         self._cancelled = False
+        
+        if scraper is None:
+            from ..utils.selenium_scraper import SeleniumScraper
+            self.scraper = SeleniumScraper()
+        else:
+            self.scraper = scraper
 
     def set_download_path(self, new_path: str) -> None:
         """Set a new download path."""
@@ -139,7 +146,6 @@ class SpotDownloader:
 
         def run():
             from .custom_engine import CustomDownloadEngine
-            from ..utils.selenium_scraper import scrape_playlist, scrape_track, scrape_album
 
             cache_file_path = None
             engine = None
@@ -156,13 +162,13 @@ class SpotDownloader:
 
                     if "playlist" in url:
                         try:
-                            playlist_data = scrape_playlist(url, headless=True, log_callback=log_callback)
+                            playlist_data = self.scraper.scrape_playlist(url, headless=True, log_callback=log_callback)
 
                             if not playlist_data:
                                 raise ProcessingError("Failed to scrape playlist - no data returned")
 
                         except Exception as e:
-                            handle_download_error(e, log_callback, "Scraping playlist with Selenium")
+                            handle_download_error(e, log_callback, f"Scraping playlist with {self.scraper.__class__.__name__}")
                             raise ProcessingError(f"Playlist scraping failed: {e}")
 
                         playlist_name = playlist_data.get('name', 'Unknown Playlist')
@@ -219,7 +225,7 @@ class SpotDownloader:
 
                     elif "track" in url:
                         try:
-                            track_info = scrape_track(url, headless=True, log_callback=log_callback)
+                            track_info = self.scraper.scrape_track(url, headless=True, log_callback=log_callback)
                             if track_info:
                                 artists = track_info.get('artists', [])
                                 metadata_list.append({
@@ -230,11 +236,11 @@ class SpotDownloader:
                                     'download_id': str(uuid.uuid4())
                                 })
                         except Exception as e:
-                            handle_download_error(e, log_callback, "Scraping track with Selenium")
+                            handle_download_error(e, log_callback, f"Scraping track with {self.scraper.__class__.__name__}")
 
                     elif "album" in url:
                         try:
-                            album_info = scrape_album(url, headless=True, log_callback=log_callback)
+                            album_info = self.scraper.scrape_album(url, headless=True, log_callback=log_callback)
                             if album_info:
                                 album_name = album_info.get('name', 'Unknown Album')
                                 tracks_data = album_info.get('tracks', album_info.get('items', []))
@@ -254,7 +260,7 @@ class SpotDownloader:
                                         'download_id': str(uuid.uuid4())
                                     })
                         except Exception as e:
-                            handle_download_error(e, log_callback, "Scraping album with Selenium")
+                            handle_download_error(e, log_callback, f"Scraping album with {self.scraper.__class__.__name__}")
                 else:
                     metadata_list.append({'name': url, 'artist': '', 'download_id': str(uuid.uuid4())})
 

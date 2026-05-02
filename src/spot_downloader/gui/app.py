@@ -262,6 +262,20 @@ class App(ctk.CTk):
         )
         format_menu.grid(row=2, column=1, sticky="e", padx=20)
 
+        # 4. Scraper Engine
+        self._add_setting_row(card, 3, "Browser Engine", "Selenium (Stable) or Playwright (Fast/Experimental)", None)
+        self.engine_var = ctk.StringVar(value=app_config.get("scraper_engine", "Selenium"))
+        engine_menu = ctk.CTkOptionMenu(
+            card, 
+            values=["Selenium", "Playwright"],
+            variable=self.engine_var,
+            command=self.save_settings,
+            fg_color=Styles.BG_SIDEBAR,
+            button_color=Styles.BG_CARD_HOVER,
+            dropdown_hover_color=Styles.ACCENT_GREEN
+        )
+        engine_menu.grid(row=3, column=1, sticky="e", padx=20)
+
     def _add_setting_row(self, parent, row, title, desc, command):
         row_frame = ctk.CTkFrame(parent, fg_color="transparent", height=70)
         row_frame.grid(row=row, column=0, sticky="ew", padx=20, pady=5)
@@ -341,6 +355,11 @@ class App(ctk.CTk):
     def save_settings(self, *args):
         app_config.set("download_quality", self.quality_var.get())
         app_config.set("file_format", self.format_var.get())
+        
+        new_engine = self.engine_var.get()
+        app_config.set("scraper_engine", new_engine)
+        self.download_service.set_scraper(new_engine)
+        
         app_config.save_config()
         self.log("Preferences updated.")
 
