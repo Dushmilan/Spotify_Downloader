@@ -1,19 +1,18 @@
 import customtkinter as ctk
 import os
 import subprocess
-import json
 import threading
 from tkinter import messagebox
 from PIL import Image
 
-from ..services.download_service import DownloadService, ValidationService
+from ..core.downloader import SpotDownloader, DownloadHandle
 from ..utils.helpers import check_ffmpeg
 from ..config import app_config
 from ..tracker import DownloadStatus
 from .styles import Styles
 
 class App(ctk.CTk):
-    def __init__(self, download_service=None):
+    def __init__(self, downloader=None):
         super().__init__()
 
         self.title("Spot-Downloader Premium")
@@ -24,8 +23,8 @@ class App(ctk.CTk):
         Styles.apply_theme()
 
         # Dependency injection for testability
-        self.download_service = download_service or DownloadService()
-        self.download_thread = None
+        self.downloader = downloader or SpotDownloader()
+        self.current_handle = None
         
         # Initialize internal state
         self.current_downloads = {}
@@ -36,7 +35,7 @@ class App(ctk.CTk):
         self.load_settings()
         
         # Register the change callback with the tracker
-        self.download_service.tracker.set_on_change_callback(self.on_tracker_change)
+        self.downloader.tracker.set_on_change_callback(self.on_tracker_change)
 
         if not check_ffmpeg():
             self.after(1500, self.show_ffmpeg_warning)
@@ -358,11 +357,7 @@ class App(ctk.CTk):
     def save_settings(self, *args):
         app_config.set("download_quality", self.quality_var.get())
         app_config.set("file_format", self.format_var.get())
-        
-        new_engine = self.engine_var.get()
-        app_config.set("scraper_engine", new_engine)
-        self.download_service.set_scraper(new_engine)
-        
+        app_config.set("scraper_engine", self.engine_var.get())
         app_config.save_config()
         self.log("Preferences updated.")
 
@@ -377,6 +372,8 @@ class App(ctk.CTk):
     def start_download(self):
         url = self.url_entry.get().strip()
         if not url: return
+        if self.current_handle is not None:
+            return
 
         self.download_btn.configure(state="disabled", text="PROCESSING...")
         self.url_entry.configure(state="disabled")
@@ -385,23 +382,33 @@ class App(ctk.CTk):
         if self.active_tab != "Downloads":
             self.show_downloads()
 
-        def run_dl():
-            try:
-                thread = self.download_service.download(url, log_callback=self.log)
-                if thread:
-                    thread.join() # Wait for the downloader thread (scraping + downloading)
-                else:
-                    self.log("Download could not be started. Check your URL.")
-            except Exception as e:
-                self.log(f"Critical Error: {e}")
-            finally:
-                self.after(0, self.reset_ui)
+        handle = self.downloader.download(url)
+        if handle is None:
+            self.log("Download could not be started. Check your URL.")
+            self.after(0, self.reset_ui)
+            return
 
-        threading.Thread(target=run_dl, daemon=True).start()
+        self.current_handle = handle
+        handle.on_log(self.log)
+
+        def on_complete(result):
+            self.after(0, self.reset_ui)
+            self.current_handle = None
+
+        def poll_result():
+            result = handle.result(timeout=0.1)
+            if result is not None:
+                on_complete(result)
+            else:
+                self.after(100, poll_result)
+
+        self.after(100, poll_result)
 
     def cancel_all_downloads(self):
         if messagebox.askyesno("Cancel All", "Are you sure you want to stop all active downloads?"):
-            self.download_service.downloader.cancel_all()
+            self.downloader.cancel_all()
+            if self.current_handle:
+                self.current_handle.cancel()
             self.log("Stopping all active downloads...")
 
     def open_download_folder(self):
@@ -430,7 +437,7 @@ class App(ctk.CTk):
         self.update_queue_ui()
 
     def update_queue_ui(self):
-        tracker = self.download_service.tracker
+        tracker = self.downloader.tracker
         downloads = tracker.get_all_downloads()
         
         if downloads and self.empty_label.winfo_exists():

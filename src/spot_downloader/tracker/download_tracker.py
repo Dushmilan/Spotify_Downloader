@@ -50,39 +50,7 @@ class DownloadTracker:
             )
             self._downloads[download_id] = item
             return item
-    
-    def update_status(self, download_id: str, status: DownloadStatus):
-        """Update the status of a download."""
-        with self._lock:
-            if download_id in self._downloads:
-                self._downloads[download_id].status = status
-                # Notify status callback if registered
-                if download_id in self._status_callbacks:
-                    self._status_callbacks[download_id](status)
-    
-    def update_progress(self, download_id: str, progress: float):
-        """Update the progress of a download."""
-        with self._lock:
-            if download_id in self._downloads:
-                self._downloads[download_id].progress = progress
-                # Notify progress callback if registered
-                if download_id in self._progress_callbacks:
-                    self._progress_callbacks[download_id](progress)
-    
-    def set_error(self, download_id: str, error_message: str):
-        """Set an error for a download."""
-        with self._lock:
-            if download_id in self._downloads:
-                self._downloads[download_id].status = DownloadStatus.FAILED
-                self._downloads[download_id].error_message = error_message
-    
-    def set_completed(self, download_id: str, download_path: str = ""):
-        """Mark a download as completed."""
-        with self._lock:
-            if download_id in self._downloads:
-                self._downloads[download_id].status = DownloadStatus.COMPLETED
-                self._downloads[download_id].download_path = download_path
-    
+
     def get_download(self, download_id: str) -> Optional[DownloadItem]:
         """Get a specific download item."""
         with self._lock:
@@ -93,15 +61,10 @@ class DownloadTracker:
         with self._lock:
             return [item for item in self._downloads.values() if item.status == status]
     
-    def get_all_downloads(self) -> List[DownloadItem]:
-        """Get all downloads."""
-        with self._lock:
-            return list(self._downloads.values())
-    
     def register_progress_callback(self, download_id: str, callback: Callable[[float], None]):
         """Register a callback for progress updates."""
         self._progress_callbacks[download_id] = callback
-    
+
     def register_status_callback(self, download_id: str, callback: Callable[[DownloadStatus], None]):
         """Register a callback for status updates."""
         self._status_callbacks[download_id] = callback
@@ -113,11 +76,15 @@ class DownloadTracker:
     def _trigger_change_callback(self):
         """Trigger the change callback if set."""
         if self._on_change_callback:
-            # Call the callback in a thread-safe way
             try:
                 self._on_change_callback()
             except:
-                pass  # Ignore errors in callbacks
+                pass
+
+    def get_all_downloads(self) -> List[DownloadItem]:
+        """Get all downloads."""
+        with self._lock:
+            return list(self._downloads.values())
 
     def get_summary(self) -> Dict[str, int]:
         """Get a summary of download counts by status."""
@@ -128,16 +95,9 @@ class DownloadTracker:
                 DownloadStatus.COMPLETED.value: 0,
                 DownloadStatus.FAILED.value: 0
             }
-
             for item in self._downloads.values():
                 summary[item.status.value] += 1
-
             return summary
-
-    def get_all_downloads(self) -> List[DownloadItem]:
-        """Get all downloads."""
-        with self._lock:
-            return list(self._downloads.values())
 
     def update_status(self, download_id: str, status: DownloadStatus):
         """Update the status of a download."""

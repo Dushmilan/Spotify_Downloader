@@ -111,3 +111,151 @@ class TestSanitizeFilename:
         long_name = "a" * 300 + ".mp3"
         result = sanitize_filename(long_name)
         assert len(result) <= 255
+
+
+class TestSpotDownloaderDeepened:
+    """Tests for the deepened SpotDownloader interface."""
+
+    def test_download_returns_handle_and_completes(self, tmp_path):
+        """download(url) returns a DownloadHandle that resolves to completed."""
+        from unittest.mock import MagicMock, patch
+
+        fake_scraper = MagicMock()
+        fake_scraper.scrape_track.return_value = {
+            'name': 'Test Song',
+            'artists': [{'name': 'Test Artist'}],
+            'duration_ms': 180000,
+            'album': {'name': 'Test Album'}
+        }
+
+        with patch('spot_downloader.core.downloader.YouTubeSearcher') as MockSearcher:
+            MockSearcher.search_ytm.return_value = 'https://youtube.com/watch?v=test'
+
+            with patch('spot_downloader.core.downloader.yt_dlp.YoutubeDL') as MockYDL:
+                mock_ydl_instance = MagicMock()
+                MockYDL.return_value.__enter__.return_value = mock_ydl_instance
+
+                song_path = os.path.join(str(tmp_path), "Test Song - Test Artist.mp3")
+                def fake_download(video_urls):
+                    os.makedirs(os.path.dirname(song_path), exist_ok=True)
+                    with open(song_path, 'wb') as f:
+                        f.write(b'\x00' * 100)
+                mock_ydl_instance.download.side_effect = fake_download
+
+                with patch('spot_downloader.core.downloader.tag_mp3', return_value=True):
+                    downloader = SpotDownloader(download_path=str(tmp_path), scraper=fake_scraper)
+                    handle = downloader.download('https://open.spotify.com/track/abc')
+                    assert handle is not None
+                    result = handle.result(timeout=10)
+                    assert result.status == 'completed'
+
+    def test_download_scraper_url_routing(self, tmp_path):
+        """download(url) routes to the correct scraper method based on URL path."""
+        from unittest.mock import MagicMock, patch
+        import time
+
+        def _wait_for_call(mock_method, timeout=3):
+            start = time.time()
+            while time.time() - start < timeout:
+                if mock_method.called:
+                    return
+                time.sleep(0.05)
+
+        fake_scraper = MagicMock()
+        fake_scraper.scrape_track.return_value = {'name': 'Track', 'artists': [{'name': 'A'}], 'duration_ms': 100000}
+        fake_scraper.scrape_album.return_value = {'name': 'Album', 'tracks': [{'name': 'T1', 'artists': [{'name': 'A'}]}]}
+        fake_scraper.scrape_playlist.return_value = {'name': 'Playlist', 'tracks': {'items': [{'track': {'name': 'T1', 'artists': [{'name': 'A'}]}}]}}
+
+        downloader = SpotDownloader(download_path=str(tmp_path), scraper=fake_scraper)
+
+        handle = downloader.download('https://open.spotify.com/track/abc123')
+        _wait_for_call(fake_scraper.scrape_track)
+        fake_scraper.scrape_track.assert_called_once()
+
+        handle = downloader.download('https://open.spotify.com/album/def456')
+        _wait_for_call(fake_scraper.scrape_album)
+        fake_scraper.scrape_album.assert_called_once()
+
+        handle = downloader.download('https://open.spotify.com/playlist/ghi789')
+        _wait_for_call(fake_scraper.scrape_playlist)
+        fake_scraper.scrape_playlist.assert_called_once()
+
+    def test_download_invalid_url_returns_none(self, tmp_path):
+        """download() returns None for invalid or unsafe URLs."""
+        from unittest.mock import MagicMock
+
+        downloader = SpotDownloader(download_path=str(tmp_path), scraper=MagicMock())
+
+        assert downloader.download(None) is None
+        assert downloader.download("") is None
+        assert downloader.download(123) is None
+
+    def test_download_unsafe_url_returns_none(self, tmp_path):
+        """download() returns None for unsafe URLs."""
+        from unittest.mock import MagicMock
+
+        downloader = SpotDownloader(download_path=str(tmp_path), scraper=MagicMock())
+
+        assert downloader.download("ftp://evil.com/file") is None
+        assert downloader.download("http://127.0.0.1:8080/attack") is None
+        assert downloader.download("") is None
+
+    def test_download_scraper_failure_returns_failed_result(self, tmp_path):
+        """When scraper raises, download() returns a failed result."""
+        from unittest.mock import MagicMock, patch
+        import time
+
+        fake_scraper = MagicMock()
+        fake_scraper.scrape_track.side_effect = RuntimeError("Scraper crashed")
+
+        downloader = SpotDownloader(download_path=str(tmp_path), scraper=fake_scraper)
+        handle = downloader.download('https://open.spotify.com/track/abc')
+
+        def _wait(handle, timeout=5):
+            start = time.time()
+            while time.time() - start < timeout:
+                r = handle.result(timeout=0.1)
+                if r is not None:
+                    return r
+            return None
+
+        result = _wait(handle)
+        assert result is not None
+        assert result.status == 'failed'
+
+    def test_cancel_stops_download(self, tmp_path):
+        """Cancelling a DownloadHandle returns cancelled status and skips remaining tracks."""
+        from unittest.mock import MagicMock, patch
+        import time
+
+        def delayed_scrape(url, headless=True, log_callback=None):
+            time.sleep(0.5)
+            return {
+                'name': 'Cancel Test',
+                'tracks': {
+                    'items': [
+                        {'track': {'name': 'Song 1', 'artists': [{'name': 'Artist A'}], 'duration_ms': 180000, 'album': {'name': 'Album X'}}},
+                        {'track': {'name': 'Song 2', 'artists': [{'name': 'Artist B'}], 'duration_ms': 200000, 'album': {'name': 'Album Y'}}},
+                    ]
+                }
+            }
+
+        fake_scraper = MagicMock()
+        fake_scraper.scrape_playlist.side_effect = delayed_scrape
+
+        with patch('spot_downloader.core.downloader.YouTubeSearcher') as MockSearcher:
+            MockSearcher.search_ytm.return_value = 'https://youtube.com/watch?v=test'
+
+            with patch('spot_downloader.core.downloader.yt_dlp.YoutubeDL') as MockYDL:
+                mock_ydl = MagicMock()
+                MockYDL.return_value.__enter__.return_value = mock_ydl
+
+                with patch('spot_downloader.core.downloader.tag_mp3', return_value=True):
+                    downloader = SpotDownloader(download_path=str(tmp_path), scraper=fake_scraper)
+                    handle = downloader.download('https://open.spotify.com/playlist/test')
+                    assert handle is not None
+                    time.sleep(0.1)
+                    handle.cancel()
+                    result = handle.result(timeout=10)
+                    assert result.status == 'cancelled'
+                    assert result.track_count == 2
