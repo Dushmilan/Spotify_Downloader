@@ -1,9 +1,8 @@
 import asyncio
 import re
 from typing import Dict, Any, List, Optional, Callable
-from ..core.interfaces import Scraper
 
-class PlaywrightScraper(Scraper):
+class PlaywrightScraper:
     """
     Playwright-based implementation of the Spotify Scraper.
     """
@@ -66,25 +65,68 @@ class PlaywrightScraper(Scraper):
                 await self._handle_cookie_consent(page)
                 
                 await page.wait_for_selector('main', timeout=15000)
-                await asyncio.sleep(2)
+                await asyncio.sleep(1)
+
+                # Wait for track title to render (may take several seconds)
+                try:
+                    await page.wait_for_selector('span[data-testid="entityTitle"]', timeout=10000)
+                except Exception:
+                    pass
 
                 metadata = await page.evaluate("""() => {
                     let name = "";
+                    let span = document.querySelector('span[data-testid="entityTitle"]');
                     let h1 = document.querySelector('h1[data-testid="entityTitle"]');
-                    if (h1) {
+                    if (span) {
+                        name = span.innerText.trim();
+                    } else if (h1) {
                         name = h1.innerText.trim();
                     } else {
-                        name = document.title.split(' - ')[0];
+                        let altH1 = document.querySelector('h1.encore-text-headline-large');
+                        if (altH1) {
+                            name = altH1.innerText.trim();
+                        } else {
+                            name = document.title.split(' - ')[0];
+                        }
                     }
 
-                    let artist_links = Array.from(document.querySelectorAll('a[href*="/artist/"]'));
-                    let artists = [...new Set(artist_links.map(a => a.innerText.trim()))].filter(a => a.length > 0);
+                    let artistLinks = document.querySelectorAll('a[data-testid="creator-link"]');
+                    let seen = new Set();
+                    let artists = [];
+                    for (let a of artistLinks) {
+                        let text = a.innerText.trim();
+                        if (text && text.length > 0 && text.length < 50 && !seen.has(text)) {
+                            seen.add(text);
+                            artists.push(text);
+                        }
+                    }
 
                     let album_link = document.querySelector('a[href*="/album/"]');
                     let album = album_link ? album_link.innerText.trim() : "Unknown Album";
 
-                    let duration_elem = document.querySelector('div[data-testid="track-duration"]');
-                    let duration_str = duration_elem ? duration_elem.innerText.trim() : "";
+                    let duration_elem = document.querySelector('div[data-testid="track-duration"], span[data-testid="track-duration"]');
+                    let duration_str = "";
+                    if (duration_elem) {
+                        duration_str = duration_elem.innerText.trim();
+                    } else {
+                        let titleSpan = document.querySelector('span[data-testid="entityTitle"]');
+                        if (titleSpan) {
+                            let container = titleSpan.parentElement;
+                            for (let i = 0; i < 4; i++) {
+                                if (!container) break;
+                                let timeSpans = container.querySelectorAll('span');
+                                for (let s of timeSpans) {
+                                    let text = (s.innerText || '').trim();
+                                    if (/^\d+:\d+$/.test(text)) {
+                                        duration_str = text;
+                                        break;
+                                    }
+                                }
+                                if (duration_str) break;
+                                container = container.parentElement;
+                            }
+                        }
+                    }
 
                     return { name, artists, album, duration_str };
                 }""")
@@ -130,13 +172,30 @@ class PlaywrightScraper(Scraper):
                 await self._handle_cookie_consent(page)
                 
                 await page.wait_for_selector('main', timeout=15000)
-                await asyncio.sleep(2)
+                await asyncio.sleep(1)
+
+                # Wait for album title to render
+                try:
+                    await page.wait_for_selector('span[data-testid="entityTitle"]', timeout=10000)
+                except Exception:
+                    pass
 
                 album_data = await page.evaluate("""() => {
                     let name = "";
+                    let span = document.querySelector('span[data-testid="entityTitle"]');
                     let h1 = document.querySelector('h1[data-testid="entityTitle"]');
-                    if (h1) name = h1.innerText.trim();
-                    else name = document.title.split(' - ')[0];
+                    if (span) {
+                        name = span.innerText.trim();
+                    } else if (h1) {
+                        name = h1.innerText.trim();
+                    } else {
+                        let altH1 = document.querySelector('h1.encore-text-headline-large');
+                        if (altH1) {
+                            name = altH1.innerText.trim();
+                        } else {
+                            name = document.title.split(' - ')[0];
+                        }
+                    }
 
                     let rows = Array.from(document.querySelectorAll('[data-testid="tracklist-row"]'));
                     let tracks = rows.map(row => {
@@ -148,11 +207,31 @@ class PlaywrightScraper(Scraper):
                            if (innerA) title = innerA.innerText.trim();
                         }
 
-                        let artist_links = Array.from(row.querySelectorAll('a[href*="/artist/"]'));
-                        let artists = artist_links.map(a => a.innerText.trim());
+                        let artistLinks = row.querySelectorAll('a[href*="/artist/"]');
+                        let seen = new Set();
+                        let artists = [];
+                        for (let al of artistLinks) {
+                            let text = al.innerText.trim();
+                            if (text && text.length > 0 && text.length < 50 && !seen.has(text)) {
+                                seen.add(text);
+                                artists.push(text);
+                            }
+                        }
 
                         let duration_elem = row.querySelector('div[data-testid*="duration"]');
-                        let duration_str = duration_elem ? duration_elem.innerText.trim() : "";
+                        let duration_str = "";
+                        if (duration_elem) {
+                            duration_str = duration_elem.innerText.trim();
+                        } else {
+                            let timeEls = row.querySelectorAll('span, div');
+                            for (let el of timeEls) {
+                                let text = (el.innerText || '').trim();
+                                if (/^\d+:\d+$/.test(text)) {
+                                    duration_str = text;
+                                    break;
+                                }
+                            }
+                        }
 
                         return { name: title, artists, duration_str };
                     }).filter(t => t.name.length > 0);
@@ -188,16 +267,152 @@ class PlaywrightScraper(Scraper):
     def scrape_album(self, url: str, headless: bool = True, log_callback: Optional[Callable[[str], None]] = None) -> Optional[Dict[str, Any]]:
         return asyncio.run(self.scrape_album_async(url, headless, log_callback))
 
+    async def _scrape_playlist_dom(self, page, log: Callable[[str], None]) -> Optional[List[Dict[str, Any]]]:
+        total_estimate = await page.evaluate("""() => {
+            let els = document.querySelectorAll('span, div');
+            for (let el of els) {
+                let text = (el.innerText || '').trim();
+                let m = text.match(/^(\\d+)\\s*songs?$/i);
+                if (m) return parseInt(m[1], 10);
+            }
+            return 0;
+        }""")
+
+        if total_estimate:
+            log(f"Playlist has {total_estimate} tracks.")
+
+        prev_count = 0
+
+        # Phase 1: Normal scroll to load initial batch
+        for _ in range(20):
+            await page.evaluate("""() => {
+                let rows = document.querySelectorAll('[data-testid="tracklist-row"]');
+                if (rows.length === 0) return;
+                let last = rows[rows.length - 1];
+                last.scrollIntoView({block: 'end'});
+                window.scrollBy(0, 400);
+            }""")
+            await asyncio.sleep(0.5)
+            count = await page.evaluate(
+                "document.querySelectorAll('[data-testid=\"tracklist-row\"]').length"
+            )
+            if count > prev_count:
+                prev_count = count
+                if total_estimate:
+                    log(f"Loaded {count} / {total_estimate} tracks...")
+                else:
+                    log(f"Loaded {count} tracks...")
+            else:
+                break
+            if total_estimate and count >= total_estimate:
+                break
+
+        # Phase 2: Zoom out to force virtual scroller to render more rows
+        if total_estimate and prev_count < total_estimate:
+            zoom_level = await page.evaluate(f"""() => {{
+                let viewport = document.querySelector('.main-view-container__scroll-node');
+                let clientH = viewport ? viewport.clientHeight : 900;
+                let rowH = 64;
+                let targetZoom = clientH / ({total_estimate} * rowH * 1.2);
+                targetZoom = Math.min(0.5, Math.max(0.008, targetZoom));
+                return targetZoom;
+            }}""")
+            log(f"Zooming to {zoom_level:.3f}x to fit ~{total_estimate} tracks...")
+            await page.evaluate(f"document.body.style.zoom = '{zoom_level}'")
+            await asyncio.sleep(2)
+
+            zoom_count = await page.evaluate(
+                "document.querySelectorAll('[data-testid=\"tracklist-row\"]').length"
+            )
+            if zoom_count > prev_count:
+                prev_count = zoom_count
+                log(f"Rendered {zoom_count} tracks after zoom.")
+
+            # Phase 3: Continue scrolling with sentinel + scroll container
+            for _ in range(30):
+                await page.evaluate("""() => {
+                    let sentinel = document.querySelector('div[data-testid="bottom-sentinel"]');
+                    if (sentinel) sentinel.scrollIntoView({block: 'nearest'});
+                    let scrollNode = document.querySelector('.main-view-container__scroll-node');
+                    if (scrollNode && scrollNode.firstElementChild) {
+                        scrollNode.firstElementChild.scrollTop = 999999;
+                    }
+                }""")
+                await asyncio.sleep(0.5)
+                count = await page.evaluate(
+                    "document.querySelectorAll('[data-testid=\"tracklist-row\"]').length"
+                )
+                if count > prev_count:
+                    prev_count = count
+                    if total_estimate:
+                        log(f"Loaded {count} / {total_estimate} tracks...")
+                    else:
+                        log(f"Loaded {count} tracks...")
+                if total_estimate and count >= total_estimate:
+                    log(f"All {total_estimate} tracks loaded.")
+                    break
+
+        # Phase 4: Parse all track rows (still zoomed out if we zoomed)
+        raw_tracks = await page.evaluate("""() => {
+            let rows = document.querySelectorAll('[data-testid="tracklist-row"]');
+            let tracks = [];
+            rows.forEach(row => {
+                let title = "";
+                let trackLink = row.querySelector('a[data-testid="internal-track-link"]');
+                if (trackLink) {
+                    title = trackLink.getAttribute('title') || trackLink.innerText.trim();
+                }
+                if (!title) {
+                    let otherA = row.querySelector('a');
+                    if (otherA) title = otherA.innerText.trim();
+                }
+                if (!title) return;
+
+                let artistLinks = row.querySelectorAll('a[href*="/artist/"]');
+                let seenArtists = new Set();
+                let artists = [];
+                for (let a of artistLinks) {
+                    let text = a.innerText.trim();
+                    if (text && text.length > 0 && text.length < 50 && !seenArtists.has(text)) {
+                        seenArtists.add(text);
+                        artists.push(text);
+                    }
+                }
+
+                let durationEl = row.querySelector('div[data-testid*="duration"]');
+                let durationStr = "";
+                if (durationEl) {
+                    durationStr = durationEl.innerText.trim();
+                } else {
+                    let timeEls = row.querySelectorAll('span, div');
+                    for (let el of timeEls) {
+                        let text = (el.innerText || '').trim();
+                        if (/^\\d+:\\d+$/.test(text)) {
+                            durationStr = text;
+                            break;
+                        }
+                    }
+                }
+
+                tracks.push({ name: title, artists, duration_str: durationStr });
+            });
+            return tracks;
+        }""")
+
+        if not raw_tracks:
+            log("No tracks found via DOM.")
+            return None
+
+        if total_estimate and len(raw_tracks) > total_estimate:
+            log(f"Trimming {len(raw_tracks) - total_estimate} buffer rows (DOM has {len(raw_tracks)}, total is {total_estimate}).")
+            raw_tracks = raw_tracks[:total_estimate]
+
+        log(f"Parsed {len(raw_tracks)} tracks.")
+        return raw_tracks
+
     async def scrape_playlist_async(self, url: str, headless: bool = True, log_callback: Optional[Callable[[str], None]] = None) -> Optional[Dict[str, Any]]:
         def log(msg):
             if log_callback: log_callback(msg)
-
-        # 1. Extract Playlist ID from URL immediately
-        playlist_id_match = re.search(r"/playlist/([^/?#]+)", url)
-        if not playlist_id_match:
-            log("Error: Invalid Spotify playlist URL.")
-            return None
-        playlist_id = playlist_id_match.group(1)
 
         try:
             from playwright.async_api import async_playwright
@@ -206,116 +421,50 @@ class PlaywrightScraper(Scraper):
             return None
 
         async with async_playwright() as p:
-            browser = await p.chromium.launch(headless=headless, args=["--disable-blink-features=AutomationControlled"])
-            context = await browser.new_context(user_agent=self.user_agent)
+            browser = await p.chromium.launch(headless=headless)
+            context = await browser.new_context(user_agent=self.user_agent, viewport={'width': 1920, 'height': 1080})
             page = await context.new_page()
 
-            auth_token = None
-            api_headers = {}
-            captured_event = asyncio.Event()
+            try:
+                log(f"Loading playlist page...")
+                await page.goto(url, wait_until="domcontentloaded", timeout=60000)
+                await self._handle_cookie_consent(page)
+                await page.wait_for_selector('main', timeout=20000)
+                await asyncio.sleep(1)
 
-            async def handle_request(request):
-                nonlocal auth_token, api_headers
                 try:
-                    r_url = request.url
-                    # Capture headers from ANY Spotify API call
-                    if "api.spotify.com" in r_url and "authorization" in request.headers:
-                        headers = request.headers
-                        auth = headers['authorization']
-                        if auth.startswith('Bearer '):
-                            auth_token = auth
-                            # Replicate critical headers to look authentic and avoid 429/403
-                            api_headers = {
-                                'Authorization': auth,
-                                'Accept': headers.get('accept', '*/*'),
-                                'App-Platform': headers.get('app-platform', 'WebPlayer'),
-                                'Spotify-App-Version': headers.get('spotify-app-version', ''),
-                                'Client-Token': headers.get('client-token', '')
-                            }
-                            captured_event.set()
-                except:
+                    await page.wait_for_selector('span[data-testid="entityTitle"]', timeout=10000)
+                except Exception:
                     pass
 
-            page.on("request", handle_request)
+                playlist_name = await page.evaluate("""() => {
+                    let span = document.querySelector('span[data-testid="entityTitle"]');
+                    if (span) return span.innerText.trim();
+                    let h1 = document.querySelector('h1');
+                    if (h1) return h1.innerText.trim();
+                    return document.title.split(' - ')[0] || 'Playlist';
+                }""")
+                log(f"Playlist: {playlist_name}")
 
-            try:
-                log(f"Loading playlist page to capture access token...")
-                await page.goto(url, wait_until="commit", timeout=60000)
-                
-                try:
-                    await asyncio.wait_for(captured_event.wait(), timeout=20.0)
-                except asyncio.TimeoutError:
-                    log("Waiting for auth token... (scrolling to trigger)")
-                    await page.mouse.wheel(0, 2000)
-                    try:
-                        await asyncio.wait_for(captured_event.wait(), timeout=15.0)
-                    except asyncio.TimeoutError:
-                        log("Error: API token interception timed out.")
-                        return None
+                tracks = await self._scrape_playlist_dom(page, log)
 
-                log("Access token captured. Retrieving playlist metadata...")
-                
-                # Fetch playlist metadata via API for the real name
-                meta_url = f"https://api.spotify.com/v1/playlists/{playlist_id}?fields=name"
-                playlist_name = "Playlist"
-                
-                meta_data = await page.evaluate(f"""async (args) => {{
-                    try {{
-                        const res = await fetch(args.url, {{ headers: args.headers }});
-                        return res.ok ? await res.json() : {{ error: res.status }};
-                    }} catch (e) {{
-                        return {{ error: e.message }};
-                    }}
-                }}""", {"url": meta_url, "headers": api_headers})
-                
-                if not meta_data.get('error'):
-                    playlist_name = meta_data.get('name', playlist_name)
+                if not tracks:
+                    log("No tracks found.")
+                    return None
 
-                all_tracks = []
-                next_url = f"https://api.spotify.com/v1/playlists/{playlist_id}/tracks?offset=0&limit=50&market=from_token"
-
-                while next_url:
-                    max_retries = 3
-                    data = None
-                    
-                    for attempt in range(max_retries):
-                        data = await page.evaluate(f"""async (args) => {{
-                            try {{
-                                const res = await fetch(args.url, {{ headers: args.headers }});
-                                if (res.status === 429) return {{ error: 429, retryAfter: res.headers.get('Retry-After') }};
-                                if (!res.ok) return {{ error: res.status }};
-                                return await res.json();
-                            }} catch (e) {{
-                                return {{ error: e.message }};
-                            }}
-                        }}""", {"url": next_url, "headers": api_headers})
-
-                        if data.get('error') == 429:
-                            wait_time = int(data.get('retryAfter') or (attempt + 1) * 5)
-                            log(f"Rate limited (429). Waiting {wait_time}s before retry...")
-                            await asyncio.sleep(wait_time)
-                            continue
-                        break
-
-                    if "error" in data:
-                        log(f"API Fetch Error: {data['error']}. Stopping.")
-                        break
-
-                    items = data.get('items', [])
-                    all_tracks.extend(items)
-                    next_url = data.get('next')
-                    
-                    total = data.get('total', '???')
-                    log(f"Fetched {len(all_tracks)} / {total} tracks...")
-                    
-                    if not items or not next_url: break
-                    await asyncio.sleep(0.5)
-
-                log(f"Successfully scraped {len(all_tracks)} tracks from '{playlist_name}'.")
-                
+                log(f"Scraped {len(tracks)} tracks from '{playlist_name}'.")
                 return {
                     'name': playlist_name,
-                    'tracks': {'items': all_tracks},
+                    'tracks': {
+                        'items': [{
+                            'track': {
+                                'name': t['name'],
+                                'artists': [{'name': a} for a in t['artists']] if t['artists'] else [{'name': 'Unknown Artist'}],
+                                'duration_ms': self._duration_to_ms(t['duration_str']),
+                                'album': {'name': playlist_name}
+                            }
+                        } for t in tracks]
+                    }
                 }
 
             except Exception as e:

@@ -1,5 +1,5 @@
-from .logger import get_logger, log_callback_factory, setup_logging
-from .retry import retry, retry_with_fallback
+from .logger import get_logger, setup_logging
+from .retry import retry
 from .validation import validate_spotify_url, sanitize_filename, validate_download_path, is_safe_url
 from .error_handling import (
     DownloadError, DownloadErrorType,
@@ -13,11 +13,9 @@ from .throttle import Throttler
 __all__ = [
     # Logger
     'get_logger',
-    'log_callback_factory',
     'setup_logging',
     # Retry
     'retry',
-    'retry_with_fallback',
     # Validation
     'validate_spotify_url',
     'sanitize_filename',

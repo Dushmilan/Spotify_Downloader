@@ -5,6 +5,7 @@ import threading
 from tkinter import messagebox
 from PIL import Image
 
+import sys
 from ..core.downloader import SpotDownloader, DownloadHandle
 from ..utils.helpers import check_ffmpeg
 from ..config import app_config
@@ -514,3 +515,8 @@ class App(ctk.CTk):
             ui["status"].configure(text="Failed", text_color=Styles.ERROR)
         elif d.status == DownloadStatus.DOWNLOADING:
             ui["status"].configure(text=f"{int(d.progress*100)}%", text_color=Styles.TEXT_SECONDARY)
+
+
+if __name__ == "__main__":
+    app = App()
+    app.mainloop()

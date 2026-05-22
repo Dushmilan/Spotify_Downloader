@@ -9,7 +9,7 @@ import time
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "src"))
 
-from spot_downloader.utils.rate_limiter import RateLimiter, rate_limit, AdaptiveRateLimiter
+from spot_downloader.utils.rate_limiter import RateLimiter, rate_limit
 
 
 class TestRateLimiter:
@@ -67,51 +67,3 @@ class TestRateLimiter:
         # Should have tokens again
         assert limiter.acquire() is True
 
-
-class TestAdaptiveRateLimiter:
-    """Test AdaptiveRateLimiter class."""
-
-    def test_adaptive_increases_on_success(self):
-        """Test adaptive limiter increases limit on success."""
-        limiter = AdaptiveRateLimiter(initial_calls=2, initial_period=1)
-        initial_calls = limiter.current_calls
-        
-        # Simulate successful calls
-        limiter.on_success()
-        
-        assert limiter.current_calls >= initial_calls
-
-    def test_adaptive_decreases_on_error(self):
-        """Test adaptive limiter decreases limit on 429 error."""
-        limiter = AdaptiveRateLimiter(initial_calls=10, initial_period=1)
-        initial_calls = limiter.current_calls
-        
-        # Simulate rate limit error
-        limiter.on_rate_limit_error()
-        
-        assert limiter.current_calls < initial_calls
-
-    def test_adaptive_decorator(self):
-        """Test adaptive rate limit decorator."""
-        limiter = AdaptiveRateLimiter(initial_calls=5, initial_period=1)
-        
-        @limiter
-        def test_func():
-            return "success"
-        
-        assert test_func() == "success"
-
-    def test_adaptive_handles_429_error(self):
-        """Test adaptive limiter handles 429 errors."""
-        limiter = AdaptiveRateLimiter(initial_calls=5, initial_period=1)
-        initial_calls = limiter.current_calls
-        
-        @limiter
-        def raise_429():
-            raise Exception("429 Too Many Requests")
-        
-        with pytest.raises(Exception):
-            raise_429()
-        
-        # Should have decreased limit
-        assert limiter.current_calls < initial_calls

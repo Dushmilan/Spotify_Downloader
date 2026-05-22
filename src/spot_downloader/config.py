@@ -21,13 +21,13 @@ class ConfigModel(BaseModel):
     retry_attempts: int = Field(default=3, ge=0, le=10, description="Retry attempts")
     timeout_seconds: int = Field(default=30, ge=5, le=300, description="Network timeout")
     safe_mode: bool = Field(default=True, description="Enable safe mode")
-    scraper_engine: str = Field(default="Selenium", description="Browser automation engine")
+    scraper_engine: str = Field(default="Playwright", description="Browser automation engine")
     
     @field_validator("scraper_engine")
     @classmethod
     def validate_scraper(cls, v: str) -> str:
         """Validate scraper engine setting."""
-        if v not in ["Selenium", "Playwright"]:
+        if v not in ["Playwright"]:
             raise ValueError(f"Invalid scraper engine: {v}")
         return v
 
@@ -107,7 +107,7 @@ class Config:
             "retry_attempts": 3,
             "timeout_seconds": 30,
             "safe_mode": True,
-            "scraper_engine": "Selenium",
+            "scraper_engine": "Playwright",
         }
 
     def save_config(self) -> bool:

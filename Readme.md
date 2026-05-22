@@ -1,85 +1,125 @@
-# Spot-Downloader Desktop
+# Spot-Downloader
 
-A modern, secure GUI-based application for downloading Spotify songs and playlists, built with `CustomTkinter` and powered by `yt-dlp`.
+> Desktop GUI for downloading Spotify music — playlists, albums, or single tracks — with automatic metadata tagging.
+
+![Python](https://img.shields.io/badge/python-3.8+-blue)
+![Platform](https://img.shields.io/badge/platform-windows%20%7C%20linux%20%7C%20macos-lightgrey)
+![License](https://img.shields.io/badge/license-MIT-green)
+
+---
 
 ## Features
-- ✨ Modern, sleek GUI using `CustomTkinter`.
-- 🔒 Enhanced security with URL validation and file sanitization.
-- 🎵 Download single songs or entire playlists via Selenium scraping.
-- 📂 Automatic file organization with configurable paths.
-- 🚀 Multi-threaded downloads to keep the UI responsive.
-- ⚙️ Configurable settings for download quality, format, and concurrency.
-- 📊 Improved progress tracking and logging.
-- 🛠️ Better error handling and fuzzy metadata matching.
 
-## Prerequisites
-- **Python 3.8+**
+- **Spotify → MP3/FLAC/M4A** — Paste a Spotify URL, get a tagged audio file.
+- **Playlists & albums** — Download entire collections in one click. Large playlists (600+ tracks) supported.
+- **Desktop GUI** — Built with CustomTkinter. Native look, light/dark theme, resizable.
+- **Auto-tagging** — Album art, artist, title, album name embedded via mutagen.
+- **Concurrent downloads** — Configurable parallel downloads with progress tracking per track.
+- **Resume-ready** — Skips already-downloaded files. Cancel mid-operation without corruption.
+- **No API keys** — Scrapes metadata via Playwright (no Spotify API credentials needed).
 
-## Installation
-1. Clone the repository.
-2. Install the required dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
+## Quick start
 
-   That's it! FFmpeg is automatically installed via the `imageio-ffmpeg` package - no manual setup required.
-
-## Usage
-Run the application using:
 ```bash
+# Install
+pip install -r requirements.txt
+playwright install chromium
+
+# Run
 python main.py
 ```
 
-1. Paste a Spotify track or playlist URL into the input field.
-2. Click **Download**.
-3. Collected files will be saved in the configured download folder.
-4. Click **Open Folder** to view your downloads.
+**Prerequisites**: Python 3.8+. FFmpeg is bundled automatically via `imageio-ffmpeg`.
 
-## Configuration
-The application supports various configuration options through `config.json`:
-- `download_path`: Directory for downloaded files
-- `max_concurrent_downloads`: Maximum number of simultaneous downloads
-- `download_quality`: Audio quality (128kbps, 256kbps, 320kbps)
-- `file_format`: Output format (mp3, flac, m4a)
-- `retry_attempts`: Number of retry attempts for failed downloads
-- `timeout_seconds`: Network timeout in seconds
-- `safe_mode`: Enable extra security validations
+## Usage
+
+| Step | Action |
+|---|---|
+| 1 | Paste a Spotify URL (track, album, or playlist) |
+| 2 | Click **Download** |
+| 3 | Track progress in the queue panel |
+| 4 | Click **Open Folder** to browse completed files |
+
+### Configuration
+
+Settings are available in-app or directly in `config.json`:
+
+| Key | Default | Description |
+|---|---|---|
+| `download_quality` | `320kbps` | Audio bitrate: `128kbps`, `256kbps`, or `320kbps` |
+| `file_format` | `mp3` | Output format: `mp3`, `flac`, or `m4a` |
+| `max_concurrent_downloads` | `5` | Parallel download limit (1–10) |
+| `download_path` | `downloads` | Output directory |
+| `retry_attempts` | `3` | Retries on failure (0–10) |
+| `safe_mode` | `true` | Enables URL & path security validation |
 
 ## Architecture
-The application follows a service-oriented architecture:
-- `main.py`: Application entry point.
-- `gui/`: Contains UI code with separation from business logic.
-- `core/`: Core download engine and processing logic.
-- `services/`: Business logic separated from UI concerns.
-- `utils/`: Utility functions for validation, tagging, and error handling.
-- `config.py`: Application configuration management.
 
-## Security Features
-- Input validation for Spotify URLs
-- File path sanitization to prevent directory traversal
-- Safe URL validation for external resources
-- Configurable safe mode for enhanced security
+```
+src/spot_downloader/
+├── gui/              # CustomTkinter desktop UI
+│   ├── app.py        # Main window, queue, settings panels
+│   └── styles.py     # Theme colours & fonts
+├── core/             # Download orchestration
+│   ├── downloader.py # SpotDownloader, DownloadHandle
+│   └── searcher.py   # YouTube Music search
+├── tracker/          # Download state management
+│   └── download_tracker.py
+└── utils/            # Supporting modules
+    ├── playwright_scraper.py  # Spotify DOM scraping
+    ├── tagger.py              # Audio metadata tagging
+    ├── validation.py          # URL/path security
+    ├── error_handling.py      # Typed exceptions
+    ├── retry.py               # Exponential-backoff retry
+    ├── rate_limiter.py        # Token-bucket rate limiter
+    ├── logger.py              # Logging setup
+    ├── throttle.py            # Call rate throttle
+    └── helpers.py             # FFmpeg discovery
+```
 
-## Structure
-- `main.py`: Application entry point.
-- `src/spot_downloader/`: Main application package
-  - `gui/`: User interface components
-  - `core/`: Core download functionality
-  - `services/`: Business logic services
-  - `utils/`: Utility functions
-  - `config.py`: Configuration management
-- `downloads/`: Default location for downloaded music.
+### How it works
+
+1. **Scrape** — Playwright loads the Spotify page, extracts track names, artists, durations via DOM parsing. For large playlists, a zoom-based strategy forces the virtual scroller to render all rows.
+2. **Search** — Each track is looked up on YouTube Music via DOM-parsed search results with fuzzy matching.
+3. **Download** — `yt-dlp` downloads the best-matching audio stream.
+4. **Tag** — mutagen embeds ID3 tags and album art into the output file.
+
+## Development
+
+```bash
+# Install dev dependencies
+pip install -e ".[dev,test]"
+
+# Run tests
+pytest
+
+# Lint & type-check
+ruff check src/
+mypy src/
+```
+
+### Project structure
+
+```
+├── .issues/          # Tracked issue specs (one per feature/bug)
+├── docs/adr/         # Architecture Decision Records
+├── plans/            # Planning docs & migration guides
+├── tests/            # pytest suite (82+ tests)
+└── src/
+```
+
+## Security
+
+- URL validation rejects non-Spotify and private-IP URLs
+- Filename sanitization prevents directory traversal
+- Safe mode blocks downloads to paths outside the configured directory
+- All external requests go through validated, scheme-restricted URLs
 
 ## Troubleshooting
 
-If you encounter issues:
-
-1. **FFmpeg not found**: The app automatically uses bundled FFmpeg via `imageio-ffmpeg`. If you still see this error, try:
-   ```bash
-   pip install imageio-ffmpeg
-   ```
-   Alternatively, you can install FFmpeg manually and add it to your system PATH.
-
-2. **Spotify anti-bot measures**: The application uses Selenium to scrape metadata. If blocked, try reducing the number of concurrent downloads.
-
-3. **Permission errors**: Make sure the download directory is writable.
+| Symptom | Fix |
+|---|---|
+| "FFmpeg not found" | Run `pip install imageio-ffmpeg` or install FFmpeg manually |
+| Playlist shows only ~60 tracks | Requires Chromium — run `playwright install chromium` |
+| Download fails mid-way | Check network. Retries are automatic (configurable in settings) |
+| GUI doesn't open | Ensure `customtkinter` is installed: `pip install customtkinter` |

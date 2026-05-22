@@ -44,20 +44,6 @@ def get_logger(name: str) -> logging.Logger:
     return logger
 
 
-def log_callback_factory(logger: logging.Logger):
-    """
-    Create a log callback function compatible with the downloader's callback system.
-    
-    Args:
-        logger: Logger instance to use
-    
-    Returns:
-        Callback function that logs messages
-    """
-    def callback(message: str):
-        logger.info(message)
-    return callback
-
 
 def setup_logging(log_level: Optional[str] = None, log_file: Optional[str] = None):
     """
